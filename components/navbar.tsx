@@ -112,7 +112,7 @@ export function Navbar() {
               </div>
               <div className="flex flex-col">
                 <span className="font-extrabold text-base sm:text-lg tracking-tight text-white leading-none flex items-center gap-1.5">
-                  FantaRose
+                  Smadonnante
                   <span className="text-xs font-semibold px-1.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
                     26/27
                   </span>
