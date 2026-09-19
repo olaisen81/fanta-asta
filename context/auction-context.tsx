@@ -21,7 +21,7 @@ import {
 } from '../lib/fantacalcio/calculator';
 import { INITIAL_SERIE_A_PLAYERS, INITIAL_TEAMS } from '../lib/fantacalcio/default-players';
 import { findSerieAClub } from '../lib/fantacalcio/history-importer';
-import { createClient, isSupabaseConfigured } from '../lib/supabase/client';
+import { createClient, isSupabaseConfigured, setDynamicSupabaseConfig } from '../lib/supabase/client';
 
 export const DEFAULT_SEASONS: Season[] = [
   { id: '2026-2027', name: '2026/2027', is_current: true, budget: 500 },
@@ -117,9 +117,34 @@ export function AuctionProvider({ children }: { children: React.ReactNode }) {
   const [activeTeamId, setActiveTeamId] = useState<string | null>(null);
   const [isHydrated, setIsHydrated] = useState<boolean>(false);
 
-  const supabaseConfigured = isSupabaseConfigured();
-  const [isFetchingSupabase, setIsFetchingSupabase] = useState<boolean>(supabaseConfigured);
+  const [supabaseConfigured, setSupabaseConfigured] = useState<boolean>(() => isSupabaseConfigured());
+  const [isFetchingSupabase, setIsFetchingSupabase] = useState<boolean>(() => isSupabaseConfigured());
   const isLoadingData = !isHydrated || isFetchingSupabase;
+
+  // Se Supabase non era disponibile a build-time (es. variabili non prefissate con NEXT_PUBLIC_ su Vercel),
+  // interroga l'endpoint server /api/supabase-config per attivarlo a runtime!
+  useEffect(() => {
+    if (supabaseConfigured) return;
+
+    let isMounted = true;
+    fetch('/api/supabase-config')
+      .then((res) => res.json())
+      .then((data) => {
+        if (!isMounted) return;
+        if (data.configured && data.url && data.anonKey) {
+          setDynamicSupabaseConfig(data.url, data.anonKey);
+          setSupabaseConfigured(true);
+          setIsFetchingSupabase(true);
+        }
+      })
+      .catch((err) => {
+        console.warn('Controllo runtime Supabase config non riuscito:', err);
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [supabaseConfigured]);
 
   // Helper per salvataggio immediato e atomico in localStorage
   const persistStateLocally = useCallback(
