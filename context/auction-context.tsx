@@ -108,6 +108,8 @@ interface AuctionContextType {
   setActiveTeamId: (id: string | null) => void;
   // Actions
   loginAsUser: (email: string, role: 'admin' | 'player', teamId?: string) => void;
+  impersonateUser: (teamId: string) => void;
+  stopImpersonating: () => void;
   logout: () => Promise<void>;
   callPlayer: (player: Player, startingBid?: number) => Promise<void>;
   updateBid: (price: number, leadingTeamId?: string) => Promise<void>;
@@ -293,18 +295,24 @@ export function AuctionProvider({ children }: { children: React.ReactNode }) {
     // 1. Recupera sessione al mount
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (session?.user?.email) {
-        const resolved = resolveUserSession(session.user.email, teams, league, session.user.user_metadata);
-        setCurrentUser(resolved);
-        persistStateLocally({ currentUser: resolved });
+        setCurrentUser((prev) => {
+          if (prev.isImpersonating) return prev;
+          const resolved = resolveUserSession(session.user.email, teams, league, session.user.user_metadata);
+          persistStateLocally({ currentUser: resolved });
+          return resolved;
+        });
       }
     });
 
     // 2. Ascolta cambi di login/logout/token in tempo reale
     const { data: authListener } = supabase.auth.onAuthStateChange((event, session) => {
       if (session?.user?.email) {
-        const resolved = resolveUserSession(session.user.email, teams, league, session.user.user_metadata);
-        setCurrentUser(resolved);
-        persistStateLocally({ currentUser: resolved });
+        setCurrentUser((prev) => {
+          if (prev.isImpersonating) return prev;
+          const resolved = resolveUserSession(session.user.email, teams, league, session.user.user_metadata);
+          persistStateLocally({ currentUser: resolved });
+          return resolved;
+        });
       } else if (event === 'SIGNED_OUT') {
         const guestSession: UserSession = {
           email: '',
@@ -1629,19 +1637,59 @@ export function AuctionProvider({ children }: { children: React.ReactNode }) {
   );
 
   // Login / Switch rapido utente
+  // Personifica una squadra (conservando l'identità admin reale per poter tornare indietro)
+  const impersonateUser = useCallback(
+    (teamId: string) => {
+      const targetTeam = teams.find((t) => t.id === teamId);
+      const originalAdmin = currentUser.isImpersonating
+        ? currentUser.realAdminEmail
+        : currentUser.email || 'fabio.perfetti81@gmail.com';
+
+      const impersonatedSession: UserSession = {
+        email: targetTeam?.manager_email || `${teamId}@fantaasta.it`,
+        isAdmin: false,
+        teamId: targetTeam?.id || teamId,
+        managerName: targetTeam?.manager_name || targetTeam?.name || 'Giocatore',
+        isImpersonating: true,
+        realAdminEmail: originalAdmin,
+      };
+
+      setCurrentUser(impersonatedSession);
+      persistStateLocally({ currentUser: impersonatedSession });
+    },
+    [teams, currentUser, persistStateLocally]
+  );
+
+  // Termina la personificazione e ripristina la sessione Admin
+  const stopImpersonating = useCallback(() => {
+    const adminEmail = currentUser.realAdminEmail || 'fabio.perfetti81@gmail.com';
+    const restored = resolveUserSession(adminEmail, teams, league);
+    restored.isImpersonating = false;
+    delete restored.realAdminEmail;
+
+    setCurrentUser(restored);
+    persistStateLocally({ currentUser: restored });
+  }, [currentUser, teams, league, persistStateLocally]);
+
+  // Login / Switch rapido utente
   const loginAsUser = useCallback(
     (email: string, role: 'admin' | 'player', teamId?: string) => {
-      const userTeam = teams.find((t) => t.id === teamId);
-      const newSession: UserSession = {
-        email,
-        isAdmin: role === 'admin',
-        teamId: teamId || (role === 'admin' ? teams[0]?.id : null),
-        managerName: userTeam?.manager_name || (role === 'admin' ? 'Banditore (Admin)' : 'Giocatore'),
-      };
-      setCurrentUser(newSession);
-      persistStateLocally({ currentUser: newSession });
+      if (role === 'admin') {
+        const userTeam = teams.find((t) => t.id === teamId);
+        const adminSession: UserSession = {
+          email,
+          isAdmin: true,
+          teamId: teamId || teams[0]?.id || null,
+          managerName: userTeam?.manager_name || 'Banditore (Admin)',
+          isImpersonating: false,
+        };
+        setCurrentUser(adminSession);
+        persistStateLocally({ currentUser: adminSession });
+      } else {
+        impersonateUser(teamId || teams[1]?.id || 'team-2');
+      }
     },
-    [teams, persistStateLocally]
+    [teams, impersonateUser, persistStateLocally]
   );
 
   // Logout
@@ -1687,6 +1735,8 @@ export function AuctionProvider({ children }: { children: React.ReactNode }) {
         activeTeamId,
         setActiveTeamId,
         loginAsUser,
+        impersonateUser,
+        stopImpersonating,
         logout,
         callPlayer,
         updateBid,

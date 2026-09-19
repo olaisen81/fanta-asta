@@ -124,4 +124,7 @@ export interface UserSession {
   isAdmin: boolean;
   teamId?: string | null;
   managerName?: string;
+  isImpersonating?: boolean;
+  realAdminEmail?: string;
 }
+

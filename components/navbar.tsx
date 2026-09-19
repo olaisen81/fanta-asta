@@ -19,6 +19,8 @@ import {
   LogIn,
   History,
   FileSpreadsheet,
+  RotateCcw,
+  Eye,
 } from 'lucide-react';
 import { useAuction } from '../context/auction-context';
 
@@ -32,6 +34,8 @@ export function Navbar() {
     isLoadingData,
     teams,
     loginAsUser,
+    impersonateUser,
+    stopImpersonating,
     logout,
   } = useAuction();
   const [showRoleMenu, setShowRoleMenu] = useState(false);
@@ -56,10 +60,40 @@ export function Navbar() {
     router.push('/login');
   };
 
+  const handleStopImpersonating = () => {
+    setShowRoleMenu(false);
+    setShowMobileMenu(false);
+    stopImpersonating();
+  };
+
   const userTeam = teams.find((t) => t.id === currentUser.teamId);
 
   return (
     <>
+      {/* BANNER STICKY DI AVVISO PERSONIFICAZIONE CON TASTO DI RITORNO AD ADMIN */}
+      {currentUser.isImpersonating && (
+        <div className="bg-gradient-to-r from-amber-500 via-amber-400 to-amber-500 text-slate-950 font-bold px-3 sm:px-6 py-2 text-xs flex flex-wrap items-center justify-between gap-2 shadow-lg z-50">
+          <div className="flex items-center gap-2">
+            <span className="p-1 rounded-md bg-black/15 flex items-center justify-center">
+              <Eye className="h-4 w-4 text-slate-950" />
+            </span>
+            <span>
+              Modalità Personificazione: stai visualizzando l'app come{' '}
+              <strong>{currentUser.managerName}</strong>{' '}
+              {userTeam ? `(${userTeam.name})` : ''}
+            </span>
+          </div>
+          <button
+            type="button"
+            onClick={handleStopImpersonating}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-950 hover:bg-slate-900 text-amber-300 text-xs font-black shadow transition-transform active:scale-95 shrink-0"
+          >
+            <RotateCcw className="h-3.5 w-3.5 text-amber-400" />
+            <span>Torna al tuo account Admin</span>
+          </button>
+        </div>
+      )}
+
       <header className="sticky top-0 z-40 w-full border-b border-slate-800/80 bg-[#0c1220]/95 backdrop-blur-md">
         <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-3 sm:px-6">
           {/* Logo & Realtime Status */}
@@ -150,10 +184,24 @@ export function Navbar() {
               <div className="relative">
                 <button
                   onClick={() => setShowRoleMenu(!showRoleMenu)}
-                  className="flex items-center gap-2 px-2.5 sm:px-3 py-1.5 rounded-xl border border-slate-700/80 bg-slate-800/70 hover:bg-slate-700/80 text-xs sm:text-sm text-slate-200 transition-colors shadow-sm"
-                  title="Profilo e impostazioni utente"
+                  className={`flex items-center gap-2 px-2.5 sm:px-3 py-1.5 rounded-xl border transition-colors shadow-sm ${
+                    currentUser.isImpersonating
+                      ? 'border-amber-500/80 bg-amber-500/15 hover:bg-amber-500/25 text-amber-300'
+                      : 'border-slate-700/80 bg-slate-800/70 hover:bg-slate-700/80 text-slate-200'
+                  }`}
+                  title="Profilo e opzioni utente"
                 >
-                  {currentUser.isAdmin ? (
+                  {currentUser.isImpersonating ? (
+                    <span className="flex items-center gap-1.5 text-amber-400 font-bold">
+                      <Eye className="h-4 w-4 text-amber-400 animate-pulse" />
+                      <span className="truncate max-w-[90px] sm:max-w-[120px]">
+                        {currentUser.managerName}
+                      </span>
+                      <span className="hidden sm:inline text-[9px] px-1.5 py-0.5 rounded-full bg-amber-400/20 text-amber-300 font-semibold border border-amber-400/30">
+                        Simula
+                      </span>
+                    </span>
+                  ) : currentUser.isAdmin ? (
                     <span className="flex items-center gap-1.5 text-amber-400 font-semibold">
                       <ShieldCheck className="h-4 w-4" />
                       <span className="hidden sm:inline">Banditore</span> (Admin)
@@ -184,6 +232,29 @@ export function Navbar() {
                       onClick={() => setShowRoleMenu(false)}
                     />
                     <div className="absolute right-0 mt-2 w-72 rounded-2xl border border-slate-700 bg-[#0f172a] p-3 shadow-2xl z-50 animate-in fade-in-50 zoom-in-95">
+                      {/* Box Personificazione Attiva con Tasto di Ritorno */}
+                      {currentUser.isImpersonating && (
+                        <div className="mb-2.5 p-2.5 rounded-xl bg-amber-500/15 border border-amber-500/30 text-xs space-y-2">
+                          <div className="flex items-center justify-between text-amber-300 font-bold">
+                            <span className="flex items-center gap-1.5">
+                              <Eye className="h-3.5 w-3.5" />
+                              <span>Personificazione Attiva</span>
+                            </span>
+                          </div>
+                          <p className="text-[11px] text-amber-200/80 leading-tight">
+                            Stai vedendo l'app come {currentUser.managerName}. Puoi tornare al tuo account Admin in qualsiasi momento.
+                          </p>
+                          <button
+                            type="button"
+                            onClick={handleStopImpersonating}
+                            className="w-full flex items-center justify-center gap-1.5 py-1.5 px-3 rounded-lg bg-amber-500 text-slate-950 font-black text-xs hover:bg-amber-400 transition-colors shadow"
+                          >
+                            <RotateCcw className="h-3.5 w-3.5" />
+                            <span>Torna al tuo Admin</span>
+                          </button>
+                        </div>
+                      )}
+
                       {/* Profilo Header */}
                       <div className="pb-2.5 border-b border-slate-800">
                         <div className="flex items-center justify-between">
@@ -192,14 +263,18 @@ export function Navbar() {
                           </span>
                           <span
                             className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
-                              currentUser.isAdmin
+                              currentUser.isImpersonating
+                                ? 'bg-amber-500/20 text-amber-300 border-amber-500/30'
+                                : currentUser.isAdmin
                                 ? 'bg-amber-500/20 text-amber-300 border-amber-500/30'
                                 : currentUser.teamId
                                 ? 'bg-sky-500/20 text-sky-300 border-sky-500/30'
                                 : 'bg-slate-800 text-slate-400 border-slate-700'
                             }`}
                           >
-                            {currentUser.isAdmin
+                            {currentUser.isImpersonating
+                              ? 'In Simulazione'
+                              : currentUser.isAdmin
                               ? 'Admin'
                               : currentUser.teamId
                               ? 'Partecipante'
@@ -213,33 +288,53 @@ export function Navbar() {
                         )}
                       </div>
 
-                      {/* Se ADMIN: Mostra opzioni di personificazione e link admin */}
-                      {currentUser.isAdmin ? (
+                      {/* Se ADMIN o IN PERSONIFICAZIONE: Mostra switch squadre e strumenti */}
+                      {currentUser.isAdmin || currentUser.isImpersonating ? (
                         <>
-                          <div className="pt-2 pb-1 text-[11px] font-semibold text-slate-400 uppercase tracking-wider">
-                            Personifica Utente
+                          <div className="pt-2 pb-1 text-[11px] font-semibold text-slate-400 uppercase tracking-wider flex items-center justify-between">
+                            <span>
+                              {currentUser.isImpersonating
+                                ? 'Cambia Squadra Simulata'
+                                : 'Personifica Utente'}
+                            </span>
                           </div>
 
-                          <button
-                            onClick={() => {
-                              loginAsUser(currentUser.email || 'admin@fantaasta.it', 'admin', teams[0]?.id);
-                              setShowRoleMenu(false);
-                            }}
-                            className={`w-full flex items-center justify-between px-2.5 py-1.5 text-xs rounded-lg text-left transition-colors ${
-                              currentUser.isAdmin
-                                ? 'bg-amber-500/20 text-amber-300 font-medium'
-                                : 'text-slate-300 hover:bg-slate-800'
-                            }`}
-                          >
-                            <div className="flex items-center gap-2">
-                              <ShieldCheck className="h-4 w-4 text-amber-400" />
-                              <div>
-                                <div className="font-semibold">Banditore (Admin)</div>
-                                <div className="text-[10px] text-slate-400">Pieni permessi di scrittura</div>
+                          {!currentUser.isImpersonating ? (
+                            <button
+                              onClick={() => {
+                                loginAsUser(currentUser.email || 'admin@fantaasta.it', 'admin', teams[0]?.id);
+                                setShowRoleMenu(false);
+                              }}
+                              className={`w-full flex items-center justify-between px-2.5 py-1.5 text-xs rounded-lg text-left transition-colors ${
+                                currentUser.isAdmin
+                                  ? 'bg-amber-500/20 text-amber-300 font-medium'
+                                  : 'text-slate-300 hover:bg-slate-800'
+                              }`}
+                            >
+                              <div className="flex items-center gap-2">
+                                <ShieldCheck className="h-4 w-4 text-amber-400" />
+                                <div>
+                                  <div className="font-semibold">Banditore (Admin)</div>
+                                  <div className="text-[10px] text-slate-400">Pieni permessi di scrittura</div>
+                                </div>
                               </div>
-                            </div>
-                            {currentUser.isAdmin && <div className="h-2 w-2 rounded-full bg-amber-400" />}
-                          </button>
+                              {currentUser.isAdmin && <div className="h-2 w-2 rounded-full bg-amber-400" />}
+                            </button>
+                          ) : (
+                            <button
+                              onClick={handleStopImpersonating}
+                              className="w-full flex items-center justify-between px-2.5 py-1.5 text-xs rounded-lg text-left transition-colors bg-amber-500/20 text-amber-300 font-bold mb-1 hover:bg-amber-500/30"
+                            >
+                              <div className="flex items-center gap-2">
+                                <ShieldCheck className="h-4 w-4 text-amber-400" />
+                                <div>
+                                  <div className="font-semibold">Ripristina Banditore (Admin)</div>
+                                  <div className="text-[10px] text-amber-300/80">Ritorna alla modalità Admin</div>
+                                </div>
+                              </div>
+                              <RotateCcw className="h-3.5 w-3.5 text-amber-400" />
+                            </button>
+                          )}
 
                           <div className="my-1.5 border-t border-slate-800/80" />
 
@@ -249,12 +344,12 @@ export function Navbar() {
 
                           <div className="max-h-40 overflow-y-auto space-y-0.5 pr-1">
                             {teams.map((team) => {
-                              const isSelected = !currentUser.isAdmin && currentUser.teamId === team.id;
+                              const isSelected = currentUser.teamId === team.id;
                               return (
                                 <button
                                   key={team.id}
                                   onClick={() => {
-                                    loginAsUser(team.manager_email || `${team.id}@lega.it`, 'player', team.id);
+                                    impersonateUser(team.id);
                                     setShowRoleMenu(false);
                                   }}
                                   className={`w-full flex items-center justify-between px-2.5 py-1.5 text-xs rounded-lg text-left transition-colors ${
@@ -275,27 +370,29 @@ export function Navbar() {
                             })}
                           </div>
 
-                          <div className="mt-2 pt-2 border-t border-slate-800 space-y-1">
-                            <Link
-                              href="/admin/importa-storico"
-                              onClick={() => setShowRoleMenu(false)}
-                              className="flex items-center gap-2 px-2.5 py-1.5 text-xs rounded-lg text-emerald-400 hover:bg-slate-800 transition-colors"
-                            >
-                              <FileSpreadsheet className="h-4 w-4" />
-                              <span>Importa Excel (10 Anni)</span>
-                            </Link>
-                            <Link
-                              href="/admin/squadre"
-                              onClick={() => setShowRoleMenu(false)}
-                              className="flex items-center gap-2 px-2.5 py-1.5 text-xs rounded-lg text-slate-300 hover:bg-slate-800 transition-colors"
-                            >
-                              <Settings className="h-4 w-4" />
-                              <span>Gestione Squadre & Regole</span>
-                            </Link>
-                          </div>
+                          {currentUser.isAdmin && (
+                            <div className="mt-2 pt-2 border-t border-slate-800 space-y-1">
+                              <Link
+                                href="/admin/importa-storico"
+                                onClick={() => setShowRoleMenu(false)}
+                                className="flex items-center gap-2 px-2.5 py-1.5 text-xs rounded-lg text-emerald-400 hover:bg-slate-800 transition-colors"
+                              >
+                                <FileSpreadsheet className="h-4 w-4" />
+                                <span>Importa Excel (10 Anni)</span>
+                              </Link>
+                              <Link
+                                href="/admin/squadre"
+                                onClick={() => setShowRoleMenu(false)}
+                                className="flex items-center gap-2 px-2.5 py-1.5 text-xs rounded-lg text-slate-300 hover:bg-slate-800 transition-colors"
+                              >
+                                <Settings className="h-4 w-4" />
+                                <span>Gestione Squadre & Regole</span>
+                              </Link>
+                            </div>
+                          )}
                         </>
                       ) : (
-                        /* Se NON ADMIN: Nessuna personificazione consentita, mostra solo stato squadra */
+                        /* Se VERO NON-ADMIN: nessuna personificazione consentita */
                         <div className="py-2.5 space-y-2">
                           {userTeam ? (
                             <div className="p-2.5 rounded-xl bg-slate-900 border border-slate-800 text-xs">
@@ -385,6 +482,17 @@ export function Navbar() {
                   {currentUser.managerName || 'Ospite'}
                 </span>
               </div>
+
+              {currentUser.isImpersonating && (
+                <button
+                  type="button"
+                  onClick={handleStopImpersonating}
+                  className="w-full flex items-center justify-center gap-2 py-2 px-3 rounded-xl bg-amber-500 text-slate-950 text-xs font-black"
+                >
+                  <RotateCcw className="h-4 w-4" />
+                  <span>Torna al tuo Admin</span>
+                </button>
+              )}
 
               {currentUser.email || currentUser.isAdmin ? (
                 <button
