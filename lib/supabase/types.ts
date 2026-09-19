@@ -31,6 +31,7 @@ export interface Team {
   manager_name: string;
   manager_email?: string | null;
   user_id?: string | null;
+  is_admin?: boolean;
   initial_budget: number;
   bonus_credits?: number; // crediti extra gennaio/riparazione
   order_index: number;

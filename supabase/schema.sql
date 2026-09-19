@@ -34,6 +34,7 @@ CREATE TABLE IF NOT EXISTS public.teams (
     manager_name TEXT NOT NULL,
     manager_email TEXT,
     user_id UUID,
+    is_admin BOOLEAN NOT NULL DEFAULT false,
     initial_budget INTEGER NOT NULL DEFAULT 500,
     bonus_credits INTEGER NOT NULL DEFAULT 0,
     order_index INTEGER DEFAULT 0,

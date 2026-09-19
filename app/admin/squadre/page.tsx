@@ -50,7 +50,7 @@ export default function AdminSquadrePage() {
   }, [isLoadingData, currentUser.isAdmin, router]);
 
   const [editingTeamId, setEditingTeamId] = useState<string | null>(null);
-  const [formData, setFormData] = useState({ name: '', manager_name: '', manager_email: '' });
+  const [formData, setFormData] = useState({ name: '', manager_name: '', manager_email: '', is_admin: false });
   const [copiedToken, setCopiedToken] = useState<string | null>(null);
   const [showResetConfirm, setShowResetConfirm] = useState(false);
   const [resetSuccess, setResetSuccess] = useState(false);
@@ -89,7 +89,7 @@ export default function AdminSquadrePage() {
 
   // Stato per aggiunta nuova squadra
   const [showAddModal, setShowAddModal] = useState(false);
-  const [newTeamData, setNewTeamData] = useState({ name: '', manager_name: '', manager_email: '' });
+  const [newTeamData, setNewTeamData] = useState({ name: '', manager_name: '', manager_email: '', is_admin: false });
   const [isCreatingTeam, setIsCreatingTeam] = useState(false);
   const [addTeamSuccess, setAddTeamSuccess] = useState<string | null>(null);
 
@@ -144,6 +144,7 @@ export default function AdminSquadrePage() {
       name: team.name,
       manager_name: team.manager_name,
       manager_email: team.manager_email || '',
+      is_admin: Boolean(team.is_admin),
     });
   };
 
@@ -152,6 +153,7 @@ export default function AdminSquadrePage() {
       name: formData.name.trim(),
       manager_name: formData.manager_name.trim(),
       manager_email: formData.manager_email.trim() || null,
+      is_admin: formData.is_admin,
     });
     setEditingTeamId(null);
   };
@@ -202,10 +204,12 @@ export default function AdminSquadrePage() {
       const created = await createTeam(
         newTeamData.name.trim(),
         newTeamData.manager_name.trim(),
-        newTeamData.manager_email.trim() || undefined
+        newTeamData.manager_email.trim() || undefined,
+        undefined,
+        newTeamData.is_admin
       );
       setShowAddModal(false);
-      setNewTeamData({ name: '', manager_name: '', manager_email: '' });
+      setNewTeamData({ name: '', manager_name: '', manager_email: '', is_admin: false });
       setAddTeamSuccess(`Squadra "${created.name}" aggiunta alla lega con successo.`);
       setTimeout(() => setAddTeamSuccess(null), 4000);
     } finally {
@@ -645,6 +649,24 @@ export default function AdminSquadrePage() {
                       </div>
                     </div>
 
+                    <div className="pt-2 border-t border-slate-800/80 mt-1">
+                      <label className="flex items-center gap-2.5 cursor-pointer select-none">
+                        <input
+                          type="checkbox"
+                          checked={formData.is_admin}
+                          onChange={(e) => setFormData({ ...formData, is_admin: e.target.checked })}
+                          className="h-4 w-4 rounded border-slate-700 bg-slate-900 text-amber-500 focus:ring-amber-500/30 accent-amber-500"
+                        />
+                        <span className="text-xs font-bold text-amber-400 flex items-center gap-1.5">
+                          <ShieldCheck className="h-4 w-4 text-amber-400" />
+                          Amministratore della Lega (Banditore Asta)
+                        </span>
+                      </label>
+                      <p className="text-[11px] text-slate-400 mt-1 ml-6.5">
+                        Concede i privilegi per gestire le squadre, bandire l'asta, modificare le impostazioni e personificare gli utenti.
+                      </p>
+                    </div>
+
                     <div className="flex justify-end gap-2 pt-2">
                       <button
                         onClick={() => setEditingTeamId(null)}
@@ -670,10 +692,11 @@ export default function AdminSquadrePage() {
                       </span>
 
                       <div>
-                        <div className="font-extrabold text-sm text-white flex items-center gap-2">
+                        <div className="font-extrabold text-sm text-white flex items-center gap-2 flex-wrap">
                           <span>{team.name}</span>
-                          {idx === 0 && (
-                            <span className="text-[10px] font-semibold px-2 py-0.2 rounded-full bg-amber-500/20 text-amber-400 border border-amber-500/30">
+                          {team.is_admin && (
+                            <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-400 border border-amber-500/30 shadow-sm">
+                              <ShieldCheck className="h-3 w-3 text-amber-400" />
                               Admin
                             </span>
                           )}
@@ -864,12 +887,30 @@ export default function AdminSquadrePage() {
                 />
               </div>
 
+              <div className="pt-1">
+                <label className="flex items-center gap-2.5 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={newTeamData.is_admin}
+                    onChange={(e) => setNewTeamData({ ...newTeamData, is_admin: e.target.checked })}
+                    className="h-4 w-4 rounded border-slate-700 bg-slate-900 text-amber-500 focus:ring-amber-500/30 accent-amber-500"
+                  />
+                  <span className="text-xs font-semibold text-slate-200 flex items-center gap-1.5">
+                    <ShieldCheck className="h-4 w-4 text-amber-400" />
+                    Amministratore della Lega (Banditore)
+                  </span>
+                </label>
+                <p className="text-[11px] text-slate-400 mt-0.5 ml-6.5">
+                  Concede a questo fanta-allenatore tutti i privilegi di gestione dell'asta.
+                </p>
+              </div>
+
               <div className="flex justify-end gap-2 pt-3 border-t border-slate-800">
                 <button
                   type="button"
                   onClick={() => {
                     setShowAddModal(false);
-                    setNewTeamData({ name: '', manager_name: '', manager_email: '' });
+                    setNewTeamData({ name: '', manager_name: '', manager_email: '', is_admin: false });
                   }}
                   className="px-4 py-2 text-xs font-semibold rounded-xl bg-slate-800 text-slate-300 hover:bg-slate-700"
                 >

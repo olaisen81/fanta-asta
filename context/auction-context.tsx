@@ -52,7 +52,11 @@ export function resolveUserSession(
   const adminEnv = (process.env.NEXT_PUBLIC_ADMIN_EMAIL || '').trim().toLowerCase();
   const leagueAdmin = (league?.admin_email || '').trim().toLowerCase();
 
+  // Flag su DB: se la squadra corrispondente ha is_admin === true
+  const hasDbAdminFlag = Boolean(matchedTeam?.is_admin);
+
   const isAdmin = Boolean(
+    hasDbAdminFlag ||
     cleanEmail === 'fabio.perfetti81@gmail.com' ||
     cleanEmail === 'admin@fantaasta.it' ||
     (adminEnv && cleanEmail === adminEnv) ||
@@ -70,7 +74,7 @@ export function resolveUserSession(
     teamId = matchedTeam.id;
     managerName = matchedTeam.manager_name;
   } else if (isAdmin) {
-    const adminTeam = teams.find((t) => t.manager_name?.toLowerCase().includes('admin')) || teams[0];
+    const adminTeam = teams.find((t) => t.is_admin || t.manager_name?.toLowerCase().includes('admin')) || teams[0];
     teamId = adminTeam?.id || null;
     managerName = metadata?.full_name || metadata?.name || adminTeam?.manager_name || 'Banditore (Admin)';
   } else {
@@ -143,7 +147,7 @@ interface AuctionContextType {
   addManualPlayer: (name: string, role: PlayerRole, team: string, initialPrice?: number) => Promise<Player>;
   importPlayers: (newPlayers: Omit<Player, 'id' | 'created_at'>[]) => Promise<number>;
   updateTeam: (teamId: string, updates: Partial<Team>) => Promise<void>;
-  createTeam: (name: string, manager_name: string, manager_email?: string, seasonId?: string) => Promise<Team>;
+  createTeam: (name: string, manager_name: string, manager_email?: string, seasonId?: string, is_admin?: boolean) => Promise<Team>;
   deleteTeam: (teamId: string) => Promise<boolean>;
   updateLeagueSettings: (settings: Partial<League>) => Promise<void>;
   resetAuction: () => Promise<void>;
@@ -1366,7 +1370,7 @@ export function AuctionProvider({ children }: { children: React.ReactNode }) {
 
   // Azione: Crea nuova squadra
   const createTeam = useCallback(
-    async (name: string, manager_name: string, manager_email?: string, seasonId?: string) => {
+    async (name: string, manager_name: string, manager_email?: string, seasonId?: string, is_admin?: boolean) => {
       const targetSeasonId = seasonId || selectedSeasonId || '2026-2027';
       const cleanSlug = name
         .toLowerCase()
@@ -1379,6 +1383,7 @@ export function AuctionProvider({ children }: { children: React.ReactNode }) {
         name: name.trim(),
         manager_name: manager_name.trim(),
         manager_email: manager_email?.trim() || null,
+        is_admin: Boolean(is_admin),
         initial_budget: league.total_budget || 500,
         bonus_credits: 0,
         order_index: teams.length + 1,
