@@ -123,33 +123,35 @@ export function Navbar() {
               </div>
             </Link>
 
-            {/* Realtime Pulsing Status */}
-            <div
-              className={`hidden md:flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border ${
-                isLoadingData
-                  ? 'bg-indigo-500/10 text-indigo-400 border-indigo-500/30'
-                  : isRealtimeConnected
-                  ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
-                  : 'bg-amber-500/10 text-amber-400 border-amber-500/20'
-              }`}
-            >
-              <span
-                className={`h-2 w-2 rounded-full ${
+            {/* Realtime Pulsing Status: visibile solo all'Admin */}
+            {currentUser.isAdmin && (
+              <div
+                className={`hidden md:flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border ${
                   isLoadingData
-                    ? 'bg-indigo-400 animate-ping'
+                    ? 'bg-indigo-500/10 text-indigo-400 border-indigo-500/30'
                     : isRealtimeConnected
-                    ? 'bg-emerald-400 animate-pulse'
-                    : 'bg-amber-400'
+                    ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
+                    : 'bg-amber-500/10 text-amber-400 border-amber-500/20'
                 }`}
-              />
-              <span>
-                {isLoadingData
-                  ? 'Caricamento dati...'
-                  : isSupabaseActive
-                  ? 'Supabase Realtime'
-                  : 'Sync Locale Attivo'}
-              </span>
-            </div>
+              >
+                <span
+                  className={`h-2 w-2 rounded-full ${
+                    isLoadingData
+                      ? 'bg-indigo-400 animate-ping'
+                      : isRealtimeConnected
+                      ? 'bg-emerald-400 animate-pulse'
+                      : 'bg-amber-400'
+                  }`}
+                />
+                <span>
+                  {isLoadingData
+                    ? 'Caricamento dati...'
+                    : isSupabaseActive
+                    ? 'Supabase Realtime'
+                    : 'Sync Locale Attivo'}
+                </span>
+              </div>
+            )}
           </div>
 
           {/* Desktop Navigation Links */}
@@ -479,14 +481,18 @@ export function Navbar() {
 
             <div className="pt-3 border-t border-slate-800 mt-2 space-y-2">
               <div className="flex items-center justify-between text-xs text-slate-400 px-1">
-                <span className="flex items-center gap-1.5">
-                  <span
-                    className={`h-2 w-2 rounded-full ${
-                      isRealtimeConnected ? 'bg-emerald-400 animate-pulse' : 'bg-amber-400'
-                    }`}
-                  />
-                  {isSupabaseActive ? 'Supabase Live' : 'Sincronizzazione Locale'}
-                </span>
+                {currentUser.isAdmin ? (
+                  <span className="flex items-center gap-1.5">
+                    <span
+                      className={`h-2 w-2 rounded-full ${
+                        isRealtimeConnected ? 'bg-emerald-400 animate-pulse' : 'bg-amber-400'
+                      }`}
+                    />
+                    {isSupabaseActive ? 'Supabase Live' : 'Sincronizzazione Locale'}
+                  </span>
+                ) : (
+                  <span />
+                )}
                 <span className="text-[11px] font-semibold text-slate-300">
                   {currentUser.managerName || 'Ospite'}
                 </span>

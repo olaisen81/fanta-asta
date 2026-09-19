@@ -15,6 +15,7 @@ import {
   Sparkles,
 } from 'lucide-react';
 import Link from 'next/link';
+import { isTestLoginEnabled, getAppStage } from '../../lib/config/stage';
 
 export default function LoginPage() {
   const router = useRouter();
@@ -252,11 +253,14 @@ export default function LoginPage() {
             </button>
           </form>
 
-          {/* SIMULAZIONE ACCESSO RAPIDO (Nascosto in produzione) */}
-          {process.env.NODE_ENV !== 'production' && (
+          {/* SIMULAZIONE ACCESSO RAPIDO (Disattivato in produzione / configurabile tramite stage) */}
+          {isTestLoginEnabled() && (
             <div className="pt-4 border-t border-slate-800 space-y-2">
-              <div className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider text-center">
-                Test Rapido (Solo in Sviluppo)
+              <div className="flex items-center justify-between text-[11px] font-semibold text-slate-400 uppercase tracking-wider px-1">
+                <span>Test Rapido (Senza Credenziali)</span>
+                <span className="text-[10px] lowercase px-1.5 py-0.5 rounded bg-slate-800 text-slate-400 font-mono">
+                  {getAppStage()}
+                </span>
               </div>
               <div className="grid grid-cols-2 gap-2">
                 <button
