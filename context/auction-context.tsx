@@ -103,6 +103,7 @@ interface AuctionContextType {
   setCurrentSession: (session: AuctionSessionType) => void;
   auctionState: AuctionState;
   currentUser: UserSession;
+  isLoggedIn: boolean;
   teamsStats: TeamBudgetStats[];
   isRealtimeConnected: boolean;
   isSupabaseActive: boolean;
@@ -188,14 +189,6 @@ export function AuctionProvider({ children }: { children: React.ReactNode }) {
         // Fallback
       }
     }
-    if (process.env.NODE_ENV !== 'production') {
-      return {
-        email: 'fabio.perfetti81@gmail.com',
-        isAdmin: true,
-        teamId: 'team-1',
-        managerName: 'Fabio (Admin)',
-      };
-    }
     return {
       email: '',
       isAdmin: false,
@@ -209,7 +202,9 @@ export function AuctionProvider({ children }: { children: React.ReactNode }) {
 
   const [supabaseConfigured, setSupabaseConfigured] = useState<boolean>(() => isSupabaseConfigured());
   const [isFetchingSupabase, setIsFetchingSupabase] = useState<boolean>(() => isSupabaseConfigured());
-  const isLoadingData = !isHydrated || isFetchingSupabase;
+  const [isCheckingAuth, setIsCheckingAuth] = useState<boolean>(() => isSupabaseConfigured());
+  const isLoadingData = !isHydrated || isFetchingSupabase || isCheckingAuth;
+  const isLoggedIn = Boolean(currentUser?.email && currentUser.email.trim() !== '');
 
   // Se Supabase non era disponibile a build-time (es. variabili non prefissate con NEXT_PUBLIC_ su Vercel),
   // interroga l'endpoint server /api/supabase-config per attivarlo a runtime!
@@ -292,21 +287,32 @@ export function AuctionProvider({ children }: { children: React.ReactNode }) {
 
   // Sincronizzazione con sessione Supabase Auth (Google OAuth o credenziali)
   useEffect(() => {
-    if (!supabaseConfigured) return;
+    if (!supabaseConfigured) {
+      setIsCheckingAuth(false);
+      return;
+    }
 
     const supabase = createClient();
 
     // 1. Recupera sessione al mount
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session?.user?.email) {
-        setCurrentUser((prev) => {
-          if (prev.isImpersonating) return prev;
-          const resolved = resolveUserSession(session.user.email, teams, league, session.user.user_metadata);
-          persistStateLocally({ currentUser: resolved });
-          return resolved;
-        });
-      }
-    });
+    supabase.auth
+      .getSession()
+      .then(({ data: { session } }) => {
+        if (session?.user?.email) {
+          setCurrentUser((prev) => {
+            if (prev.isImpersonating) return prev;
+            const resolved = resolveUserSession(session.user.email, teams, league, session.user.user_metadata);
+            persistStateLocally({ currentUser: resolved });
+            return resolved;
+          });
+        }
+      })
+      .catch((err) => {
+        console.warn('Errore verifica sessione Supabase:', err);
+      })
+      .finally(() => {
+        setIsCheckingAuth(false);
+      });
 
     // 2. Ascolta cambi di login/logout/token in tempo reale
     const { data: authListener } = supabase.auth.onAuthStateChange((event, session) => {
@@ -1679,22 +1685,33 @@ export function AuctionProvider({ children }: { children: React.ReactNode }) {
   // Login / Switch rapido utente
   const loginAsUser = useCallback(
     (email: string, role: 'admin' | 'player', teamId?: string) => {
+      const userTeam =
+        teams.find((t) => t.id === teamId) ||
+        teams.find((t) => t.manager_email?.toLowerCase() === email.toLowerCase());
+
       if (role === 'admin') {
-        const userTeam = teams.find((t) => t.id === teamId);
         const adminSession: UserSession = {
           email,
           isAdmin: true,
-          teamId: teamId || teams[0]?.id || null,
+          teamId: userTeam?.id || teamId || teams[0]?.id || null,
           managerName: userTeam?.manager_name || 'Banditore (Admin)',
           isImpersonating: false,
         };
         setCurrentUser(adminSession);
         persistStateLocally({ currentUser: adminSession });
       } else {
-        impersonateUser(teamId || teams[1]?.id || 'team-2');
+        const playerSession: UserSession = {
+          email,
+          isAdmin: false,
+          teamId: userTeam?.id || teamId || null,
+          managerName: userTeam?.manager_name || email.split('@')[0],
+          isImpersonating: false,
+        };
+        setCurrentUser(playerSession);
+        persistStateLocally({ currentUser: playerSession });
       }
     },
-    [teams, impersonateUser, persistStateLocally]
+    [teams, persistStateLocally]
   );
 
   // Logout
@@ -1732,6 +1749,7 @@ export function AuctionProvider({ children }: { children: React.ReactNode }) {
         setCurrentSession,
         auctionState,
         currentUser,
+        isLoggedIn,
         teamsStats,
         isRealtimeConnected,
         isSupabaseActive: supabaseConfigured,

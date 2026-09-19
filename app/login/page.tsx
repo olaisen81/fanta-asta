@@ -78,9 +78,13 @@ export default function LoginPage() {
         const matchedTeam = teams.find(
           (t) => t.manager_email?.toLowerCase() === email.toLowerCase()
         );
-        const isAdmin = email.toLowerCase().includes('admin');
+        const isAdmin = Boolean(
+          matchedTeam?.is_admin ||
+          email.toLowerCase().includes('admin') ||
+          email.toLowerCase() === 'fabio.perfetti81@gmail.com'
+        );
         loginAsUser(email, isAdmin ? 'admin' : 'player', matchedTeam?.id || teams[1]?.id);
-        router.push('/');
+        router.push(isAdmin ? '/' : '/rose');
         return;
       }
 
@@ -94,13 +98,17 @@ export default function LoginPage() {
 
       // Controlla se è admin o giocatore
       const userEmail = data.user.email || email;
-      const isAdmin = userEmail === process.env.NEXT_PUBLIC_ADMIN_EMAIL;
       const matchedTeam = teams.find(
         (t) => t.manager_email?.toLowerCase() === userEmail.toLowerCase()
       );
+      const isAdmin = Boolean(
+        matchedTeam?.is_admin ||
+        userEmail.toLowerCase() === 'fabio.perfetti81@gmail.com' ||
+        userEmail.toLowerCase() === process.env.NEXT_PUBLIC_ADMIN_EMAIL?.toLowerCase()
+      );
 
       loginAsUser(userEmail, isAdmin ? 'admin' : 'player', matchedTeam?.id);
-      router.push('/');
+      router.push(isAdmin ? '/' : '/rose');
     } catch (err: any) {
       setErrorMessage(err.message || 'Credenziali non valide.');
     } finally {

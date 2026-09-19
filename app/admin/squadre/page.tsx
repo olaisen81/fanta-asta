@@ -31,6 +31,7 @@ export default function AdminSquadrePage() {
     roster,
     league,
     currentUser,
+    isLoggedIn,
     updateTeam,
     createTeam,
     deleteTeam,
@@ -44,10 +45,14 @@ export default function AdminSquadrePage() {
   } = useAuction();
 
   useEffect(() => {
-    if (!isLoadingData && !currentUser.isAdmin) {
-      router.replace('/rose');
+    if (!isLoadingData) {
+      if (!isLoggedIn) {
+        router.replace('/login');
+      } else if (!currentUser.isAdmin) {
+        router.replace('/rose');
+      }
     }
-  }, [isLoadingData, currentUser.isAdmin, router]);
+  }, [isLoadingData, isLoggedIn, currentUser.isAdmin, router]);
 
   const [editingTeamId, setEditingTeamId] = useState<string | null>(null);
   const [formData, setFormData] = useState({ name: '', manager_name: '', manager_email: '', is_admin: false });
@@ -219,7 +224,7 @@ export default function AdminSquadrePage() {
   const teamRosterCount = teamRosterItems.length;
   const teamTotalSpent = teamRosterItems.reduce((acc, curr) => acc + curr.price, 0);
 
-  if (isLoadingData || !currentUser.isAdmin) {
+  if (isLoadingData || !isLoggedIn || !currentUser.isAdmin) {
     return <AdminSquadreSkeleton />;
   }
 

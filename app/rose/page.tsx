@@ -1,6 +1,7 @@
 'use client';
-
-import React, { useState } from 'react';
+ 
+import React, { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { useAuction } from '../../context/auction-context';
 import { PlayerRole, RosterPlayer } from '../../lib/supabase/types';
 import { getRoleBadgeStyles, formatCredits } from '../../lib/fantacalcio/calculator';
@@ -11,7 +12,15 @@ import { DeleteRosterPlayerModal } from '../../components/auction/delete-roster-
 import { RoseSkeleton } from '../../components/auction/skeletons';
 
 export default function RosePage() {
-  const { teams, roster, teamsStats, currentUser, selectedSeasonId, isLoadingData } = useAuction();
+  const router = useRouter();
+  const { teams, roster, teamsStats, currentUser, selectedSeasonId, isLoadingData, isLoggedIn } = useAuction();
+
+  useEffect(() => {
+    if (!isLoadingData && !isLoggedIn) {
+      router.replace('/login');
+    }
+  }, [isLoadingData, isLoggedIn, router]);
+
   const [selectedTeamId, setSelectedTeamId] = useState<string>('ALL');
   const [searchFilter, setSearchFilter] = useState('');
 
@@ -50,7 +59,7 @@ export default function RosePage() {
       ? teams
       : teams.filter((t) => t.id === selectedTeamId);
 
-  if (isLoadingData) {
+  if (isLoadingData || !isLoggedIn) {
     return <RoseSkeleton />;
   }
 

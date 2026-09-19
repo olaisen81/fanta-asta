@@ -15,18 +15,22 @@ import { DashboardSkeleton } from '../components/auction/skeletons';
 
 export default function RosterManagementDashboard() {
   const router = useRouter();
-  const { currentUser, league, teams, isLoadingData } = useAuction();
+  const { currentUser, league, teams, isLoadingData, isLoggedIn } = useAuction();
   const [isManualModalOpen, setIsManualModalOpen] = useState(false);
   const [inspectedTeamId, setInspectedTeamId] = useState<string | null>(null);
   const [preSelectedTeamId, setPreSelectedTeamId] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!isLoadingData && !currentUser.isAdmin) {
-      router.replace('/rose');
+    if (!isLoadingData) {
+      if (!isLoggedIn) {
+        router.replace('/login');
+      } else if (!currentUser.isAdmin) {
+        router.replace('/rose');
+      }
     }
-  }, [isLoadingData, currentUser.isAdmin, router]);
+  }, [isLoadingData, isLoggedIn, currentUser.isAdmin, router]);
 
-  if (isLoadingData || !currentUser.isAdmin) {
+  if (isLoadingData || !isLoggedIn || !currentUser.isAdmin) {
     return <DashboardSkeleton />;
   }
 

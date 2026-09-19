@@ -59,7 +59,7 @@ function InviteForm() {
       loginAsUser(email, 'player', team.id);
       setSuccess(true);
       setTimeout(() => {
-        router.push('/');
+        router.push('/rose');
       }, 1500);
     } catch (err: any) {
       setError(err.message || 'Errore durante la registrazione.');

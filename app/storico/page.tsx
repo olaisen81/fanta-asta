@@ -2,6 +2,7 @@
 
 import React, { useState, useMemo, useEffect } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import {
   History,
   Search,
@@ -23,7 +24,14 @@ import { PlayerRole, RosterPlayer } from '../../lib/supabase/types';
 import { StoricoSkeleton } from '../../components/auction/skeletons';
 
 export default function StoricoPage() {
-  const { seasons, teams, roster, currentUser, isLoadingData } = useAuction();
+  const router = useRouter();
+  const { seasons, teams, roster, currentUser, isLoadingData, isLoggedIn } = useAuction();
+
+  useEffect(() => {
+    if (!isLoadingData && !isLoggedIn) {
+      router.replace('/login');
+    }
+  }, [isLoadingData, isLoggedIn, router]);
 
   // Calcola stagioni presenti (ordinate decrescenti)
   const availableSeasons = useMemo(() => {
@@ -214,7 +222,7 @@ export default function StoricoPage() {
     document.body.removeChild(link);
   };
 
-  if (isLoadingData) {
+  if (isLoadingData || !isLoggedIn) {
     return <StoricoSkeleton />;
   }
 

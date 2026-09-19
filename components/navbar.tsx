@@ -29,6 +29,7 @@ export function Navbar() {
   const router = useRouter();
   const {
     currentUser,
+    isLoggedIn,
     isRealtimeConnected,
     isSupabaseActive,
     isLoadingData,
@@ -50,8 +51,12 @@ export function Navbar() {
     { href: '/admin/squadre', label: 'Gestione Squadre', icon: Settings, adminOnly: true },
   ];
 
-  // Per utenti non-admin, visualizza solo Rose, Listone e Storico
-  const visibleLinks = navLinks.filter((link) => !link.adminOnly || currentUser.isAdmin);
+  // Se l'utente è sloggato, nessun link di navigazione è visibile.
+  // Se è loggato non-admin, visualizza solo Rose, Listone e Storico.
+  // Se è admin, visualizza tutti i link.
+  const visibleLinks = !isLoggedIn
+    ? []
+    : navLinks.filter((link) => !link.adminOnly || currentUser.isAdmin);
 
   const handleLogout = async () => {
     setShowRoleMenu(false);
@@ -99,7 +104,7 @@ export function Navbar() {
           {/* Logo & Realtime Status */}
           <div className="flex items-center gap-3 sm:gap-6">
             <Link
-              href={currentUser.isAdmin ? '/' : '/rose'}
+              href={isLoggedIn ? (currentUser.isAdmin ? '/' : '/rose') : '/login'}
               className="flex items-center gap-2 group"
             >
               <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-tr from-indigo-500 to-emerald-500 shadow-md shadow-emerald-500/20 group-hover:scale-105 transition-transform">
@@ -148,31 +153,33 @@ export function Navbar() {
           </div>
 
           {/* Desktop Navigation Links */}
-          <nav className="hidden md:flex items-center gap-1">
-            {visibleLinks.map((link) => {
-              const Icon = link.icon;
-              const isActive = pathname === link.href;
+          {isLoggedIn && visibleLinks.length > 0 && (
+            <nav className="hidden md:flex items-center gap-1">
+              {visibleLinks.map((link) => {
+                const Icon = link.icon;
+                const isActive = pathname === link.href;
 
-              return (
-                <Link
-                  key={link.href}
-                  href={link.href}
-                  className={`flex items-center gap-2 px-3.5 py-2 rounded-lg text-sm font-medium transition-all ${
-                    isActive
-                      ? 'bg-indigo-600/20 text-indigo-400 border border-indigo-500/30 shadow-sm'
-                      : 'text-slate-300 hover:text-white hover:bg-slate-800/60'
-                  }`}
-                >
-                  <Icon className="h-4 w-4" />
-                  <span>{link.label}</span>
-                </Link>
-              );
-            })}
-          </nav>
+                return (
+                  <Link
+                    key={link.href}
+                    href={link.href}
+                    className={`flex items-center gap-2 px-3.5 py-2 rounded-lg text-sm font-medium transition-all ${
+                      isActive
+                        ? 'bg-indigo-600/20 text-indigo-400 border border-indigo-500/30 shadow-sm'
+                        : 'text-slate-300 hover:text-white hover:bg-slate-800/60'
+                    }`}
+                  >
+                    <Icon className="h-4 w-4" />
+                    <span>{link.label}</span>
+                  </Link>
+                );
+              })}
+            </nav>
+          )}
 
           {/* User Role Switcher & Profile & Logout */}
           <div className="flex items-center gap-2">
-            {!currentUser.email && !currentUser.isAdmin ? (
+            {!isLoggedIn ? (
               <Link
                 href="/login"
                 className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-indigo-500/40 bg-indigo-600/20 hover:bg-indigo-600/30 text-xs sm:text-sm font-semibold text-indigo-300 transition-colors shadow-sm"
@@ -434,13 +441,15 @@ export function Navbar() {
             )}
 
             {/* Mobile Hamburger toggle */}
-            <button
-              onClick={() => setShowMobileMenu(!showMobileMenu)}
-              className="md:hidden p-2 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800"
-              aria-label="Menu di navigazione"
-            >
-              {showMobileMenu ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
-            </button>
+            {isLoggedIn && (
+              <button
+                onClick={() => setShowMobileMenu(!showMobileMenu)}
+                className="md:hidden p-2 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800"
+                aria-label="Menu di navigazione"
+              >
+                {showMobileMenu ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+              </button>
+            )}
           </div>
         </div>
 
@@ -519,43 +528,45 @@ export function Navbar() {
       </header>
 
       {/* MOBILE BOTTOM NAVIGATION */}
-      <nav className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-[#0b101d]/95 backdrop-blur-lg border-t border-slate-800/80 px-2 py-1.5">
-        <div
-          className={`grid ${
-            visibleLinks.length === 3
-              ? 'grid-cols-3'
-              : visibleLinks.length === 4
-              ? 'grid-cols-4'
-              : 'grid-cols-5'
-          } items-center justify-around`}
-        >
-          {visibleLinks.map((link) => {
-            const Icon = link.icon;
-            const isActive = pathname === link.href;
+      {isLoggedIn && visibleLinks.length > 0 && (
+        <nav className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-[#0b101d]/95 backdrop-blur-lg border-t border-slate-800/80 px-2 py-1.5">
+          <div
+            className={`grid ${
+              visibleLinks.length === 3
+                ? 'grid-cols-3'
+                : visibleLinks.length === 4
+                ? 'grid-cols-4'
+                : 'grid-cols-5'
+            } items-center justify-around`}
+          >
+            {visibleLinks.map((link) => {
+              const Icon = link.icon;
+              const isActive = pathname === link.href;
 
-            return (
-              <Link
-                key={link.href}
-                href={link.href}
-                className={`flex flex-col items-center justify-center py-1 px-1 rounded-xl text-[10px] font-medium transition-all ${
-                  isActive
-                    ? 'text-indigo-400 font-bold scale-105'
-                    : 'text-slate-400 hover:text-slate-200'
-                }`}
-              >
-                <div
-                  className={`p-1 rounded-lg ${
-                    isActive ? 'bg-indigo-600/20 text-indigo-400' : ''
+              return (
+                <Link
+                  key={link.href}
+                  href={link.href}
+                  className={`flex flex-col items-center justify-center py-1 px-1 rounded-xl text-[10px] font-medium transition-all ${
+                    isActive
+                      ? 'text-indigo-400 font-bold scale-105'
+                      : 'text-slate-400 hover:text-slate-200'
                   }`}
                 >
-                  <Icon className="h-5 w-5" />
-                </div>
-                <span className="mt-0.5 truncate max-w-[70px] text-center">{link.label}</span>
-              </Link>
-            );
-          })}
-        </div>
-      </nav>
+                  <div
+                    className={`p-1 rounded-lg ${
+                      isActive ? 'bg-indigo-600/20 text-indigo-400' : ''
+                    }`}
+                  >
+                    <Icon className="h-5 w-5" />
+                  </div>
+                  <span className="mt-0.5 truncate max-w-[70px] text-center">{link.label}</span>
+                </Link>
+              );
+            })}
+          </div>
+        </nav>
+      )}
     </>
   );
 }

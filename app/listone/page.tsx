@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useMemo, useRef, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { useAuction } from '../../context/auction-context';
 import { PlayerRole, Player } from '../../lib/supabase/types';
 import { getRoleBadgeStyles } from '../../lib/fantacalcio/calculator';
@@ -22,7 +23,15 @@ import Link from 'next/link';
 import { ListoneSkeleton } from '../../components/auction/skeletons';
 
 export default function ListonePage() {
-  const { players, roster, teams, currentUser, callPlayer, importPlayers, isLoadingData } = useAuction();
+  const router = useRouter();
+  const { players, roster, teams, currentUser, callPlayer, importPlayers, isLoadingData, isLoggedIn } = useAuction();
+
+  useEffect(() => {
+    if (!isLoadingData && !isLoggedIn) {
+      router.replace('/login');
+    }
+  }, [isLoadingData, isLoggedIn, router]);
+
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedRole, setSelectedRole] = useState<PlayerRole | 'ALL'>('ALL');
   const [selectedStatus, setSelectedStatus] = useState<'ALL' | 'FREE' | 'BOUGHT'>('ALL');
@@ -148,7 +157,7 @@ export default function ListonePage() {
     });
   }, [players, searchTerm, selectedRole, selectedClub, selectedStatus, purchasedMap]);
 
-  if (isLoadingData) {
+  if (isLoadingData || !isLoggedIn) {
     return <ListoneSkeleton />;
   }
 

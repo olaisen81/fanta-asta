@@ -31,14 +31,18 @@ import { Skeleton } from '../../../components/auction/skeletons';
 
 export default function ImportaStoricoPage() {
   const router = useRouter();
-  const { currentUser, importHistoricalData, seasons, players } = useAuction();
+  const { currentUser, importHistoricalData, seasons, players, isLoadingData, isLoggedIn } = useAuction();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    if (!currentUser.isAdmin) {
-      router.replace('/rose');
+    if (!isLoadingData) {
+      if (!isLoggedIn) {
+        router.replace('/login');
+      } else if (!currentUser.isAdmin) {
+        router.replace('/rose');
+      }
     }
-  }, [currentUser.isAdmin, router]);
+  }, [isLoadingData, isLoggedIn, currentUser.isAdmin, router]);
 
   const [isLoading, setIsLoading] = useState(false);
   const [parsedData, setParsedData] = useState<HistoryImportResult | null>(null);
@@ -225,7 +229,7 @@ export default function ImportaStoricoPage() {
     }
   };
 
-  if (!currentUser.isAdmin) {
+  if (isLoadingData || !isLoggedIn || !currentUser.isAdmin) {
     return (
       <div className="mx-auto max-w-2xl px-4 py-16 text-center">
         <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-amber-500/10 text-amber-400 border border-amber-500/20">
