@@ -145,7 +145,7 @@ function LoginContent() {
             <Gavel className="h-7 w-7 text-white" />
           </div>
           <h1 className="text-2xl sm:text-3xl font-black text-white tracking-tight">
-            Accedi a FantaAsta Live
+            Accedi a Smadonnante Live
           </h1>
           <p className="text-xs sm:text-sm text-slate-400">
             Lega a 10 giocatori · Asta in tempo reale
