@@ -127,5 +127,7 @@ export interface UserSession {
   managerName?: string;
   isImpersonating?: boolean;
   realAdminEmail?: string;
+  isUnauthorized?: boolean;
+  unauthorizedEmail?: string;
 }
 

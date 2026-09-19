@@ -1,7 +1,7 @@
 'use client';
 
-import React, { useState } from 'react';
-import { useRouter } from 'next/navigation';
+import React, { useState, Suspense } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuction } from '../../context/auction-context';
 import { createClient, isSupabaseConfigured } from '../../lib/supabase/client';
 import {
@@ -12,14 +12,17 @@ import {
   Lock,
   ArrowRight,
   AlertCircle,
-  Sparkles,
+  ShieldAlert,
 } from 'lucide-react';
-import Link from 'next/link';
 import { isTestLoginEnabled, getAppStage } from '../../lib/config/stage';
 
-export default function LoginPage() {
+function LoginContent() {
   const router = useRouter();
-  const { teams, loginAsUser, isSupabaseActive, currentUser, logout } = useAuction();
+  const searchParams = useSearchParams();
+  const errorParam = searchParams.get('error');
+  const emailParam = searchParams.get('email');
+
+  const { teams, loginAsUser, currentUser, logout } = useAuction();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
@@ -84,6 +87,14 @@ export default function LoginPage() {
           email.toLowerCase().includes('admin') ||
           email.toLowerCase() === 'fabio.perfetti81@gmail.com'
         );
+
+        if (!matchedTeam && !isAdmin) {
+          setErrorMessage(
+            `Accesso negato: l'email "${email}" non corrisponde ad alcuna squadra registrata nella lega.`
+          );
+          return;
+        }
+
         loginAsUser(email, isAdmin ? 'admin' : 'player', matchedTeam?.id || teams[1]?.id);
         router.push(isAdmin ? '/' : '/rose');
         return;
@@ -97,7 +108,7 @@ export default function LoginPage() {
 
       if (error) throw error;
 
-      // Controlla se è admin o giocatore
+      // Controlla se è federato (admin o squadra)
       const userEmail = data.user.email || email;
       const matchedTeam = teams.find(
         (t) => t.manager_email?.toLowerCase() === userEmail.toLowerCase()
@@ -107,6 +118,14 @@ export default function LoginPage() {
         userEmail.toLowerCase() === 'fabio.perfetti81@gmail.com' ||
         userEmail.toLowerCase() === process.env.NEXT_PUBLIC_ADMIN_EMAIL?.toLowerCase()
       );
+
+      if (!matchedTeam && !isAdmin) {
+        await supabase.auth.signOut();
+        setErrorMessage(
+          `Accesso negato: l'indirizzo email "${userEmail}" non è associato ad alcuna squadra della lega.`
+        );
+        return;
+      }
 
       loginAsUser(userEmail, isAdmin ? 'admin' : 'player', matchedTeam?.id);
       router.push(isAdmin ? '/' : '/rose');
@@ -135,6 +154,22 @@ export default function LoginPage() {
 
         {/* Card di Login */}
         <div className="rounded-3xl border border-slate-800 bg-[#0e1628] p-6 sm:p-8 shadow-2xl space-y-5">
+          {/* Banner Errore Utente Non Autorizzato / Non Federato */}
+          {errorParam === 'unauthorized' && (
+            <div className="rounded-2xl bg-rose-500/15 border border-rose-500/40 p-4 text-xs text-rose-200 space-y-2 shadow-lg shadow-rose-950/40 animate-in fade-in duration-300">
+              <div className="flex items-center gap-2 font-bold text-rose-400 text-sm">
+                <ShieldAlert className="h-5 w-5 shrink-0 text-rose-400" />
+                <span>Accesso Negato: Account Non Federato</span>
+              </div>
+              <p className="text-slate-300 leading-relaxed">
+                L'indirizzo {emailParam ? <strong className="text-white font-mono bg-rose-950/60 px-1.5 py-0.5 rounded border border-rose-500/30">{emailParam}</strong> : 'Google'} non appartiene a nessuna delle squadre registrate in questa lega.
+              </p>
+              <div className="text-[11px] text-slate-400 bg-black/20 p-2.5 rounded-xl border border-rose-500/20 leading-relaxed">
+                💡 Solo gli allenatori registrati e l'amministratore possono accedere all'asta. Contatta il banditore per farti inserire tra i partecipanti.
+              </div>
+            </div>
+          )}
+
           {currentUser.email && (
             <div className="p-3.5 rounded-2xl bg-indigo-950/40 border border-indigo-500/30 text-xs text-slate-300 space-y-2">
               <div className="flex items-center justify-between">
@@ -292,5 +327,21 @@ export default function LoginPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-[80vh] flex items-center justify-center py-6 px-4">
+          <div className="w-full max-w-md rounded-3xl border border-slate-800 bg-[#0e1628] p-8 text-center text-slate-400 text-sm">
+            Caricamento...
+          </div>
+        </div>
+      }
+    >
+      <LoginContent />
+    </Suspense>
   );
 }

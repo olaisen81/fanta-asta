@@ -78,9 +78,15 @@ export function resolveUserSession(
     teamId = adminTeam?.id || null;
     managerName = metadata?.full_name || metadata?.name || adminTeam?.manager_name || 'Banditore (Admin)';
   } else {
-    // Nessuna squadra collegata
-    teamId = null;
-    managerName = metadata?.full_name || metadata?.name || cleanEmail.split('@')[0] + ' (Ospite)';
+    // Nessuna squadra collegata e non admin: utente Google non federato!
+    return {
+      email: '',
+      isAdmin: false,
+      teamId: null,
+      managerName: 'Non Autorizzato',
+      isUnauthorized: true,
+      unauthorizedEmail: userEmail,
+    };
   }
 
   return {
@@ -302,6 +308,20 @@ export function AuctionProvider({ children }: { children: React.ReactNode }) {
           setCurrentUser((prev) => {
             if (prev.isImpersonating) return prev;
             const resolved = resolveUserSession(session.user.email, teams, league, session.user.user_metadata);
+            if (resolved.isUnauthorized) {
+              supabase.auth.signOut();
+              const guestSession: UserSession = {
+                email: '',
+                isAdmin: false,
+                teamId: null,
+                managerName: 'Ospite',
+              };
+              persistStateLocally({ currentUser: guestSession });
+              if (typeof window !== 'undefined' && !window.location.pathname.startsWith('/login')) {
+                window.location.href = `/login?error=unauthorized&email=${encodeURIComponent(session.user.email || '')}`;
+              }
+              return guestSession;
+            }
             persistStateLocally({ currentUser: resolved });
             return resolved;
           });
@@ -320,6 +340,20 @@ export function AuctionProvider({ children }: { children: React.ReactNode }) {
         setCurrentUser((prev) => {
           if (prev.isImpersonating) return prev;
           const resolved = resolveUserSession(session.user.email, teams, league, session.user.user_metadata);
+          if (resolved.isUnauthorized) {
+            supabase.auth.signOut();
+            const guestSession: UserSession = {
+              email: '',
+              isAdmin: false,
+              teamId: null,
+              managerName: 'Ospite',
+            };
+            persistStateLocally({ currentUser: guestSession });
+            if (typeof window !== 'undefined' && !window.location.pathname.startsWith('/login')) {
+              window.location.href = `/login?error=unauthorized&email=${encodeURIComponent(session.user.email || '')}`;
+            }
+            return guestSession;
+          }
           persistStateLocally({ currentUser: resolved });
           return resolved;
         });
