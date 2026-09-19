@@ -48,7 +48,14 @@ export default function LoginPage() {
 
       if (error) throw error;
     } catch (err: any) {
-      setErrorMessage(err.message || 'Errore durante l\'accesso con Google.');
+      const msg = err.message || '';
+      if (msg.includes('Unsupported provider') || msg.includes('provider is not enabled')) {
+        setErrorMessage(
+          'Il provider Google non è ancora abilitato su Supabase (Authentication > Providers > Google). Nel frattempo puoi usare il pulsante "Entra come Admin" o "Entra come Giocatore" qui sotto per accedere istantaneamente!'
+        );
+      } else {
+        setErrorMessage(msg || 'Errore durante l\'accesso con Google.');
+      }
     } finally {
       setLoading(false);
     }
