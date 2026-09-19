@@ -43,15 +43,6 @@ export default function ImportaStoricoPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [parsedData, setParsedData] = useState<HistoryImportResult | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-
-  if (!currentUser.isAdmin) {
-    return (
-      <div className="p-8 space-y-4">
-        <Skeleton className="h-12 w-64 rounded-xl" />
-        <Skeleton className="h-64 rounded-2xl" />
-      </div>
-    );
-  }
   const [importSuccess, setImportSuccess] = useState<{
     seasonsCount: number;
     rosterCount: number;

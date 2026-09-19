@@ -55,10 +55,6 @@ export default function AdminSquadrePage() {
   const [showResetConfirm, setShowResetConfirm] = useState(false);
   const [resetSuccess, setResetSuccess] = useState(false);
 
-  if (isLoadingData || !currentUser.isAdmin) {
-    return <AdminSquadreSkeleton />;
-  }
-
   // Stato per gestione e archiviazione stagioni
   const [showArchiveModal, setShowArchiveModal] = useState(false);
   const [archiveForm, setArchiveForm] = useState({ seasonName: '', budget: 500 });
@@ -223,7 +219,7 @@ export default function AdminSquadrePage() {
   const teamRosterCount = teamRosterItems.length;
   const teamTotalSpent = teamRosterItems.reduce((acc, curr) => acc + curr.price, 0);
 
-  if (isLoadingData) {
+  if (isLoadingData || !currentUser.isAdmin) {
     return <AdminSquadreSkeleton />;
   }
 
