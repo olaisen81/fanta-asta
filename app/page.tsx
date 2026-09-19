@@ -1,69 +1,107 @@
-import Image from "next/image";
+'use client';
 
-export default function Home() {
+import React, { useState } from 'react';
+import { useAuction } from '../context/auction-context';
+import { QuickAssignCard } from '../components/auction/quick-assign-card';
+import { AddRosterPlayerModal } from '../components/auction/add-roster-player-modal';
+import { BudgetOverview } from '../components/auction/budget-overview';
+import { RecentActivity } from '../components/auction/recent-activity';
+import { TeamRosterModal } from '../components/auction/team-roster-modal';
+import { Player } from '../lib/supabase/types';
+import { TOTAL_SLOTS } from '../lib/fantacalcio/calculator';
+import { ShieldCheck, UserCheck, PlusCircle, Users } from 'lucide-react';
+import { DashboardSkeleton } from '../components/auction/skeletons';
+
+export default function RosterManagementDashboard() {
+  const { currentUser, league, teams, isLoadingData } = useAuction();
+  const [isManualModalOpen, setIsManualModalOpen] = useState(false);
+  const [inspectedTeamId, setInspectedTeamId] = useState<string | null>(null);
+  const [preSelectedTeamId, setPreSelectedTeamId] = useState<string | null>(null);
+
+  if (isLoadingData) {
+    return <DashboardSkeleton />;
+  }
+
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert h-5 w-[100px]"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the{" "}
-            <code className="rounded bg-black/[.06] px-1.5 py-0.5 font-mono text-[0.9em] dark:bg-white/[.08]">
-              page.tsx
-            </code>{" "}
-            file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
+    <div className="space-y-6">
+      {/* Banner di Benvenuto & Info Lega */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3.5 sm:p-4 rounded-2xl bg-gradient-to-r from-slate-900 via-indigo-950/40 to-slate-900 border border-slate-800 text-xs sm:text-sm">
+        <div className="flex items-center gap-2.5">
+          {currentUser.isAdmin ? (
+            <div className="p-2 rounded-xl bg-amber-500/20 text-amber-400 border border-amber-500/30">
+              <ShieldCheck className="h-5 w-5" />
+            </div>
+          ) : (
+            <div className="p-2 rounded-xl bg-sky-500/20 text-sky-400 border border-sky-500/30">
+              <UserCheck className="h-5 w-5" />
+            </div>
+          )}
+          <div>
+            <div className="font-extrabold text-white flex items-center gap-2">
+              <span>
+                {currentUser.isAdmin
+                  ? 'Gestore Rose (Admin)'
+                  : `Partecipante: ${currentUser.managerName}`}
+              </span>
+              <span className="text-[10px] px-2 py-0.5 rounded-full bg-slate-800 text-slate-300 font-normal">
+                {currentUser.isAdmin ? 'Pannello di Assegnazione' : 'Sola Lettura'}
+              </span>
+            </div>
+            <div className="text-slate-400 text-xs mt-0.5">
+              Lega a 10 Squadre · Massimale {league.total_budget} FM · {TOTAL_SLOTS(league)} Calciatori per Rosa ({league.slots_p}P, {league.slots_d}D, {league.slots_c}C, {league.slots_a}A) · Serie A 2026/2027
+            </div>
+          </div>
         </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert h-[14px] w-4"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={14}
+
+        <div className="flex items-center gap-2 self-start sm:self-auto">
+          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-xs font-semibold">
+            <span className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
+            <span>Sincronizzato Live</span>
+          </span>
+        </div>
+      </div>
+
+      {/* SEZIONE CENTRALE: Quick Assign & Roster Overview */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
+        {/* Colonna Sinistra / Principale: Assegnazione Rapida e Schede 10 Squadre */}
+        <div className="lg:col-span-7 xl:col-span-8 space-y-5">
+          {/* Widget Assegnazione Rapida Calciatori alle Rose */}
+          <React.Suspense fallback={<div className="p-6 rounded-3xl bg-slate-900/60 text-center text-xs text-slate-400">Caricamento widget assegnazione...</div>}>
+            <QuickAssignCard
+              onOpenManualModal={() => setIsManualModalOpen(true)}
+              preSelectedTeamId={preSelectedTeamId}
+              onClearPreSelectedTeam={() => setPreSelectedTeamId(null)}
             />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
+          </React.Suspense>
+
+          {/* Panoramica delle 10 squadre */}
+          <BudgetOverview
+            onSelectTeam={(teamId) => setInspectedTeamId(teamId)}
+            onPreSelectTeam={(teamId) => {
+              setPreSelectedTeamId(teamId);
+              window.scrollTo({ top: 0, behavior: 'smooth' });
+            }}
+          />
         </div>
-      </main>
+
+        {/* Colonna Destra: Feed Ultime Assegnazioni con modifica prezzo ed eliminazione */}
+        <div className="lg:col-span-5 xl:col-span-4 space-y-5">
+          <RecentActivity />
+        </div>
+      </div>
+
+      {/* Modale Aggiunta Calciatore Manuale alla Rosa */}
+      <AddRosterPlayerModal
+        isOpen={isManualModalOpen}
+        initialTeamId={preSelectedTeamId}
+        onClose={() => setIsManualModalOpen(false)}
+      />
+
+      {/* Modale Dettaglio Rosa Squadra con modifica/aggiunta/eliminazione */}
+      <TeamRosterModal
+        teamId={inspectedTeamId}
+        onClose={() => setInspectedTeamId(null)}
+      />
     </div>
   );
 }
