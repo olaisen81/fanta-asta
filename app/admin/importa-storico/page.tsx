@@ -2,6 +2,7 @@
 
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import {
   FileSpreadsheet,
   UploadCloud,
@@ -29,12 +30,28 @@ import { PlayerRole, Team } from '../../../lib/supabase/types';
 import { Skeleton } from '../../../components/auction/skeletons';
 
 export default function ImportaStoricoPage() {
+  const router = useRouter();
   const { currentUser, importHistoricalData, seasons, players } = useAuction();
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (!currentUser.isAdmin) {
+      router.replace('/rose');
+    }
+  }, [currentUser.isAdmin, router]);
 
   const [isLoading, setIsLoading] = useState(false);
   const [parsedData, setParsedData] = useState<HistoryImportResult | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  if (!currentUser.isAdmin) {
+    return (
+      <div className="p-8 space-y-4">
+        <Skeleton className="h-12 w-64 rounded-xl" />
+        <Skeleton className="h-64 rounded-2xl" />
+      </div>
+    );
+  }
   const [importSuccess, setImportSuccess] = useState<{
     seasonsCount: number;
     rosterCount: number;

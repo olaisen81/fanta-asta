@@ -825,6 +825,7 @@ export const INITIAL_TEAMS = [
     "league_id": "00000000-0000-0000-0000-000000000001",
     "name": "Birrareal",
     "manager_name": "Fabio (Admin)",
+    "manager_email": "fabio.perfetti81@gmail.com",
     "initial_budget": 500,
     "order_index": 1
   },

@@ -1,6 +1,7 @@
 'use client';
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { useAuction } from '../../../context/auction-context';
 import { TOTAL_SLOTS, getRoleBadgeStyles } from '../../../lib/fantacalcio/calculator';
 import {
@@ -24,6 +25,7 @@ import {
 import { AdminSquadreSkeleton } from '../../../components/auction/skeletons';
 
 export default function AdminSquadrePage() {
+  const router = useRouter();
   const {
     teams,
     roster,
@@ -40,11 +42,22 @@ export default function AdminSquadrePage() {
     setCurrentActiveSeason,
     isLoadingData,
   } = useAuction();
+
+  useEffect(() => {
+    if (!isLoadingData && !currentUser.isAdmin) {
+      router.replace('/rose');
+    }
+  }, [isLoadingData, currentUser.isAdmin, router]);
+
   const [editingTeamId, setEditingTeamId] = useState<string | null>(null);
   const [formData, setFormData] = useState({ name: '', manager_name: '', manager_email: '' });
   const [copiedToken, setCopiedToken] = useState<string | null>(null);
   const [showResetConfirm, setShowResetConfirm] = useState(false);
   const [resetSuccess, setResetSuccess] = useState(false);
+
+  if (isLoadingData || !currentUser.isAdmin) {
+    return <AdminSquadreSkeleton />;
+  }
 
   // Stato per gestione e archiviazione stagioni
   const [showArchiveModal, setShowArchiveModal] = useState(false);

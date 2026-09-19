@@ -27,6 +27,66 @@ export const DEFAULT_SEASONS: Season[] = [
   { id: '2026-2027', name: '2026/2027', is_current: true, budget: 500 },
 ];
 
+export function resolveUserSession(
+  userEmail: string | undefined,
+  teams: Team[],
+  league: League,
+  metadata?: { full_name?: string; name?: string; is_admin?: boolean; role?: string }
+): UserSession {
+  if (!userEmail) {
+    return {
+      email: '',
+      isAdmin: false,
+      teamId: null,
+      managerName: 'Ospite',
+    };
+  }
+
+  const cleanEmail = userEmail.trim().toLowerCase();
+
+  // Match con manager_email registrata sulle squadre (case-insensitive)
+  const matchedTeam = teams.find(
+    (t) => t.manager_email && t.manager_email.trim().toLowerCase() === cleanEmail
+  );
+
+  const adminEnv = (process.env.NEXT_PUBLIC_ADMIN_EMAIL || '').trim().toLowerCase();
+  const leagueAdmin = (league?.admin_email || '').trim().toLowerCase();
+
+  const isAdmin = Boolean(
+    cleanEmail === 'fabio.perfetti81@gmail.com' ||
+    cleanEmail === 'admin@fantaasta.it' ||
+    (adminEnv && cleanEmail === adminEnv) ||
+    (leagueAdmin && cleanEmail === leagueAdmin) ||
+    metadata?.role === 'admin' ||
+    metadata?.is_admin === true ||
+    (matchedTeam && matchedTeam.manager_name?.toLowerCase().includes('admin')) ||
+    cleanEmail.startsWith('admin')
+  );
+
+  let teamId: string | null = null;
+  let managerName = '';
+
+  if (matchedTeam) {
+    teamId = matchedTeam.id;
+    managerName = matchedTeam.manager_name;
+  } else if (isAdmin) {
+    const adminTeam = teams.find((t) => t.manager_name?.toLowerCase().includes('admin')) || teams[0];
+    teamId = adminTeam?.id || null;
+    managerName = metadata?.full_name || metadata?.name || adminTeam?.manager_name || 'Banditore (Admin)';
+  } else {
+    // Nessuna squadra collegata
+    teamId = null;
+    managerName = metadata?.full_name || metadata?.name || cleanEmail.split('@')[0] + ' (Ospite)';
+  }
+
+  return {
+    email: userEmail,
+    isAdmin,
+    teamId,
+    managerName,
+  };
+}
+
 interface AuctionContextType {
   league: League;
   teams: Team[];
@@ -48,6 +108,7 @@ interface AuctionContextType {
   setActiveTeamId: (id: string | null) => void;
   // Actions
   loginAsUser: (email: string, role: 'admin' | 'player', teamId?: string) => void;
+  logout: () => Promise<void>;
   callPlayer: (player: Player, startingBid?: number) => Promise<void>;
   updateBid: (price: number, leadingTeamId?: string) => Promise<void>;
   assignPlayer: (teamId: string, price: number, player?: Player) => Promise<{ success: boolean; error?: string }>;
@@ -107,11 +168,34 @@ export function AuctionProvider({ children }: { children: React.ReactNode }) {
     status: 'idle',
     updated_at: new Date().toISOString(),
   });
-  const [currentUser, setCurrentUser] = useState<UserSession>({
-    email: 'admin@fantaasta.it',
-    isAdmin: true,
-    teamId: 'team-1',
-    managerName: 'Fabio (Admin)',
+  const [currentUser, setCurrentUser] = useState<UserSession>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const saved = localStorage.getItem(LOCAL_STORAGE_KEY);
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          if (parsed.currentUser && parsed.currentUser.email) {
+            return parsed.currentUser;
+          }
+        }
+      } catch {
+        // Fallback
+      }
+    }
+    if (process.env.NODE_ENV !== 'production') {
+      return {
+        email: 'fabio.perfetti81@gmail.com',
+        isAdmin: true,
+        teamId: 'team-1',
+        managerName: 'Fabio (Admin)',
+      };
+    }
+    return {
+      email: '',
+      isAdmin: false,
+      teamId: null,
+      managerName: 'Ospite',
+    };
   });
   const [isRealtimeConnected, setIsRealtimeConnected] = useState<boolean>(true);
   const [activeTeamId, setActiveTeamId] = useState<string | null>(null);
@@ -199,6 +283,44 @@ export function AuctionProvider({ children }: { children: React.ReactNode }) {
       }
     }
   }, []);
+
+  // Sincronizzazione con sessione Supabase Auth (Google OAuth o credenziali)
+  useEffect(() => {
+    if (!supabaseConfigured) return;
+
+    const supabase = createClient();
+
+    // 1. Recupera sessione al mount
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session?.user?.email) {
+        const resolved = resolveUserSession(session.user.email, teams, league, session.user.user_metadata);
+        setCurrentUser(resolved);
+        persistStateLocally({ currentUser: resolved });
+      }
+    });
+
+    // 2. Ascolta cambi di login/logout/token in tempo reale
+    const { data: authListener } = supabase.auth.onAuthStateChange((event, session) => {
+      if (session?.user?.email) {
+        const resolved = resolveUserSession(session.user.email, teams, league, session.user.user_metadata);
+        setCurrentUser(resolved);
+        persistStateLocally({ currentUser: resolved });
+      } else if (event === 'SIGNED_OUT') {
+        const guestSession: UserSession = {
+          email: '',
+          isAdmin: false,
+          teamId: null,
+          managerName: 'Ospite',
+        };
+        setCurrentUser(guestSession);
+        persistStateLocally({ currentUser: guestSession });
+      }
+    });
+
+    return () => {
+      authListener.subscription.unsubscribe();
+    };
+  }, [supabaseConfigured, teams, league, persistStateLocally]);
 
   // Sincronizzazione locale (BroadcastChannel tra tab e salvataggio se idratato)
   useEffect(() => {
@@ -1517,9 +1639,31 @@ export function AuctionProvider({ children }: { children: React.ReactNode }) {
         managerName: userTeam?.manager_name || (role === 'admin' ? 'Banditore (Admin)' : 'Giocatore'),
       };
       setCurrentUser(newSession);
+      persistStateLocally({ currentUser: newSession });
     },
-    [teams]
+    [teams, persistStateLocally]
   );
+
+  // Logout
+  const logout = useCallback(async () => {
+    try {
+      if (supabaseConfigured) {
+        const supabase = createClient();
+        await supabase.auth.signOut();
+      }
+    } catch (err) {
+      console.error('Errore durante signOut:', err);
+    } finally {
+      const guestSession: UserSession = {
+        email: '',
+        isAdmin: false,
+        teamId: null,
+        managerName: 'Ospite',
+      };
+      setCurrentUser(guestSession);
+      persistStateLocally({ currentUser: guestSession });
+    }
+  }, [supabaseConfigured, persistStateLocally]);
 
   return (
     <AuctionContext.Provider
@@ -1543,6 +1687,7 @@ export function AuctionProvider({ children }: { children: React.ReactNode }) {
         activeTeamId,
         setActiveTeamId,
         loginAsUser,
+        logout,
         callPlayer,
         updateBid,
         assignPlayer,

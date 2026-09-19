@@ -18,7 +18,7 @@ import Link from 'next/link';
 
 export default function LoginPage() {
   const router = useRouter();
-  const { teams, loginAsUser, isSupabaseActive } = useAuction();
+  const { teams, loginAsUser, isSupabaseActive, currentUser, logout } = useAuction();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
@@ -126,6 +126,39 @@ export default function LoginPage() {
 
         {/* Card di Login */}
         <div className="rounded-3xl border border-slate-800 bg-[#0e1628] p-6 sm:p-8 shadow-2xl space-y-5">
+          {currentUser.email && (
+            <div className="p-3.5 rounded-2xl bg-indigo-950/40 border border-indigo-500/30 text-xs text-slate-300 space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="font-semibold text-white">Sessione Attiva</span>
+                <span className="text-[10px] px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 font-bold">
+                  {currentUser.isAdmin ? 'Admin' : 'Partecipante'}
+                </span>
+              </div>
+              <div className="text-[11px] text-slate-400 truncate">
+                {currentUser.managerName} ({currentUser.email})
+              </div>
+              <div className="flex items-center gap-2 pt-1">
+                <button
+                  type="button"
+                  onClick={() => router.push(currentUser.isAdmin ? '/' : '/rose')}
+                  className="flex-1 py-1.5 px-3 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs flex items-center justify-center gap-1.5 transition-colors"
+                >
+                  <span>Vai all'applicazione</span>
+                  <ArrowRight className="h-3.5 w-3.5" />
+                </button>
+                <button
+                  type="button"
+                  onClick={async () => {
+                    await logout();
+                  }}
+                  className="py-1.5 px-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-semibold text-xs transition-colors"
+                >
+                  Disconnetti
+                </button>
+              </div>
+            </div>
+          )}
+
           {errorMessage && (
             <div className="rounded-xl bg-rose-500/15 border border-rose-500/30 p-3 text-xs text-rose-300 flex items-center gap-2">
               <AlertCircle className="h-4 w-4 shrink-0" />
@@ -211,37 +244,39 @@ export default function LoginPage() {
             </button>
           </form>
 
-          {/* SIMULAZIONE ACCESSO RAPIDO (Ideale per test e presentazione immediata) */}
-          <div className="pt-4 border-t border-slate-800 space-y-2">
-            <div className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider text-center">
-              Test Rapido (Senza Credenziali)
-            </div>
-            <div className="grid grid-cols-2 gap-2">
-              <button
-                type="button"
-                onClick={() => {
-                  loginAsUser('admin@fantaasta.it', 'admin', teams[0]?.id);
-                  router.push('/');
-                }}
-                className="py-2 px-2.5 rounded-xl border border-amber-500/30 bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 text-xs font-bold flex items-center justify-center gap-1.5 transition-colors"
-              >
-                <ShieldCheck className="h-4 w-4 text-amber-400" />
-                <span>Entra come Admin</span>
-              </button>
+          {/* SIMULAZIONE ACCESSO RAPIDO (Nascosto in produzione) */}
+          {process.env.NODE_ENV !== 'production' && (
+            <div className="pt-4 border-t border-slate-800 space-y-2">
+              <div className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider text-center">
+                Test Rapido (Solo in Sviluppo)
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    loginAsUser('fabio.perfetti81@gmail.com', 'admin', teams[0]?.id);
+                    router.push('/');
+                  }}
+                  className="py-2 px-2.5 rounded-xl border border-amber-500/30 bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 text-xs font-bold flex items-center justify-center gap-1.5 transition-colors"
+                >
+                  <ShieldCheck className="h-4 w-4 text-amber-400" />
+                  <span>Entra come Admin</span>
+                </button>
 
-              <button
-                type="button"
-                onClick={() => {
-                  loginAsUser('giocatore@fantaasta.it', 'player', teams[1]?.id);
-                  router.push('/');
-                }}
-                className="py-2 px-2.5 rounded-xl border border-sky-500/30 bg-sky-500/10 hover:bg-sky-500/20 text-sky-300 text-xs font-bold flex items-center justify-center gap-1.5 transition-colors"
-              >
-                <UserCheck className="h-4 w-4 text-sky-400" />
-                <span>Entra come Giocatore</span>
-              </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    loginAsUser(teams[1]?.manager_email || 'giocatore@fantaasta.it', 'player', teams[1]?.id);
+                    router.push('/rose');
+                  }}
+                  className="py-2 px-2.5 rounded-xl border border-sky-500/30 bg-sky-500/10 hover:bg-sky-500/20 text-sky-300 text-xs font-bold flex items-center justify-center gap-1.5 transition-colors"
+                >
+                  <UserCheck className="h-4 w-4 text-sky-400" />
+                  <span>Entra come Giocatore</span>
+                </button>
+              </div>
             </div>
-          </div>
+          )}
         </div>
       </div>
     </div>

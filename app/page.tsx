@@ -1,6 +1,7 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { useAuction } from '../context/auction-context';
 import { QuickAssignCard } from '../components/auction/quick-assign-card';
 import { AddRosterPlayerModal } from '../components/auction/add-roster-player-modal';
@@ -13,12 +14,19 @@ import { ShieldCheck, UserCheck, PlusCircle, Users } from 'lucide-react';
 import { DashboardSkeleton } from '../components/auction/skeletons';
 
 export default function RosterManagementDashboard() {
+  const router = useRouter();
   const { currentUser, league, teams, isLoadingData } = useAuction();
   const [isManualModalOpen, setIsManualModalOpen] = useState(false);
   const [inspectedTeamId, setInspectedTeamId] = useState<string | null>(null);
   const [preSelectedTeamId, setPreSelectedTeamId] = useState<string | null>(null);
 
-  if (isLoadingData) {
+  useEffect(() => {
+    if (!isLoadingData && !currentUser.isAdmin) {
+      router.replace('/rose');
+    }
+  }, [isLoadingData, currentUser.isAdmin, router]);
+
+  if (isLoadingData || !currentUser.isAdmin) {
     return <DashboardSkeleton />;
   }
 
