@@ -148,7 +148,7 @@ function LoginContent() {
             Accedi a Smadonnante Live
           </h1>
           <p className="text-xs sm:text-sm text-slate-400">
-            Lega a 10 giocatori · Asta in tempo reale
+            Lega a 10 giocatori
           </p>
         </div>
 
@@ -159,13 +159,13 @@ function LoginContent() {
             <div className="rounded-2xl bg-rose-500/15 border border-rose-500/40 p-4 text-xs text-rose-200 space-y-2 shadow-lg shadow-rose-950/40 animate-in fade-in duration-300">
               <div className="flex items-center gap-2 font-bold text-rose-400 text-sm">
                 <ShieldAlert className="h-5 w-5 shrink-0 text-rose-400" />
-                <span>Accesso Negato: Account Non Federato</span>
+                <span>Accesso Negato: Account non federato</span>
               </div>
               <p className="text-slate-300 leading-relaxed">
                 L'indirizzo {emailParam ? <strong className="text-white font-mono bg-rose-950/60 px-1.5 py-0.5 rounded border border-rose-500/30">{emailParam}</strong> : 'Google'} non appartiene a nessuna delle squadre registrate in questa lega.
               </p>
               <div className="text-[11px] text-slate-400 bg-black/20 p-2.5 rounded-xl border border-rose-500/20 leading-relaxed">
-                💡 Solo gli allenatori registrati e l'amministratore possono accedere all'asta. Contatta il banditore per farti inserire tra i partecipanti.
+                💡 Solo gli allenatori registrati e l'amministratore possono accedere a Smadonnante Live. Contatta l'amministratore per farti inserire tra i partecipanti.
               </div>
             </div>
           )}
