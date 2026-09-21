@@ -1,10 +1,10 @@
 'use client';
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { X, UserPlus, Plus, CheckCircle2, AlertCircle, Coins, Search, Sparkles } from 'lucide-react';
-import { PlayerRole, AuctionSessionType, Player } from '../../lib/supabase/types';
+import { PlayerRole, AuctionSessionType, Player, RosterPlayer } from '../../lib/supabase/types';
 import { useAuction } from '../../context/auction-context';
-import { getRoleBadgeStyles, calculateTeamStats } from '../../lib/fantacalcio/calculator';
+import { getRoleBadgeStyles, calculateTeamStats, checkPlayerRosterStatus } from '../../lib/fantacalcio/calculator';
 
 interface AddRosterPlayerModalProps {
   isOpen: boolean;
@@ -25,7 +25,7 @@ export function AddRosterPlayerModal({
   initialRole,
   onClose,
 }: AddRosterPlayerModalProps) {
-  const { teams, roster, players, league, currentSession, addCustomPlayerToRoster } = useAuction();
+  const { teams, roster, players, league, seasons, selectedSeasonId, currentSession, addCustomPlayerToRoster } = useAuction();
 
   const [teamId, setTeamId] = useState('');
   const [name, setName] = useState('');
@@ -35,9 +35,19 @@ export function AddRosterPlayerModal({
   const [session, setSession] = useState<AuctionSessionType>('initial');
   const [searchQuery, setSearchQuery] = useState('');
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+  const [highlightedIndex, setHighlightedIndex] = useState<number>(-1);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const listRef = useRef<HTMLDivElement>(null);
+
+  // Stagione attiva corrente (esclude le stagioni archiviate)
+  const activeSeasonId = seasons.find((s) => s.is_current)?.id || selectedSeasonId || '2026-2027';
+
+  // Rosa della sola stagione attuale
+  const currentSeasonRoster = useMemo(() => {
+    return roster.filter((r) => !r.season_id || r.season_id === activeSeasonId);
+  }, [roster, activeSeasonId]);
 
   useEffect(() => {
     if (isOpen) {
@@ -50,8 +60,26 @@ export function AddRosterPlayerModal({
       setSession(currentSession || 'initial');
       setErrorMessage(null);
       setIsDropdownOpen(false);
+      setHighlightedIndex(-1);
     }
   }, [isOpen, initialTeamId, initialRole, teams, currentSession]);
+
+  // Gestione tasto Escape globale per chiudere modale o dropdown
+  useEffect(() => {
+    if (!isOpen) return;
+    function handleGlobalKeyDown(e: KeyboardEvent) {
+      if (e.key === 'Escape') {
+        if (isDropdownOpen) {
+          setIsDropdownOpen(false);
+          setHighlightedIndex(-1);
+        } else {
+          onClose();
+        }
+      }
+    }
+    window.addEventListener('keydown', handleGlobalKeyDown);
+    return () => window.removeEventListener('keydown', handleGlobalKeyDown);
+  }, [isOpen, isDropdownOpen, onClose]);
 
   // Gestione click fuori dal dropdown suggerimenti
   useEffect(() => {
@@ -64,15 +92,25 @@ export function AddRosterPlayerModal({
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
+  // Scroll automatico per l'elemento evidenziato da tastiera
+  useEffect(() => {
+    if (highlightedIndex >= 0 && listRef.current) {
+      const activeElement = listRef.current.children[highlightedIndex] as HTMLElement;
+      if (activeElement) {
+        activeElement.scrollIntoView({ block: 'nearest' });
+      }
+    }
+  }, [highlightedIndex]);
+
   if (!isOpen) return null;
 
   const targetTeam = teams.find((t) => t.id === teamId);
-  const targetStats = targetTeam ? calculateTeamStats(targetTeam, roster, league) : null;
+  const targetStats = targetTeam ? calculateTeamStats(targetTeam, currentSeasonRoster, league) : null;
   const roles: PlayerRole[] = ['P', 'D', 'C', 'A'];
 
-  // Già acquistati attivi
+  // Già acquistati attivi nella stagione attuale
   const alreadyBoughtNames = new Set(
-    roster.filter((r) => !r.is_released).map((r) => r.player_name.toLowerCase().trim())
+    currentSeasonRoster.filter((r) => !r.is_released).map((r) => r.player_name.toLowerCase().trim())
   );
 
   // Suggerimenti dal listone
@@ -93,10 +131,11 @@ export function AddRosterPlayerModal({
     setSerieATeam(p.team);
     setPrice(p.initial_price || 1);
     setIsDropdownOpen(false);
+    setHighlightedIndex(-1);
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSubmit = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
     const finalName = (name.trim() || searchQuery.trim());
     if (!finalName) {
       setErrorMessage('Inserisci o seleziona il nome del calciatore.');
@@ -133,6 +172,47 @@ export function AddRosterPlayerModal({
       setErrorMessage(err.message || 'Errore imprevisto.');
     } finally {
       setIsSubmitting(false);
+    }
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (!isDropdownOpen || filteredSuggestions.length === 0) {
+      if (e.key === 'ArrowDown' && filteredSuggestions.length > 0) {
+        e.preventDefault();
+        setIsDropdownOpen(true);
+        setHighlightedIndex(0);
+      } else if (e.key === 'Escape') {
+        e.preventDefault();
+        onClose();
+      } else if (e.key === 'Enter') {
+        e.preventDefault();
+        handleSubmit(e);
+      }
+      return;
+    }
+
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      setHighlightedIndex((prev) => (prev + 1 < filteredSuggestions.length ? prev + 1 : 0));
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      setHighlightedIndex((prev) => (prev > 0 ? prev - 1 : filteredSuggestions.length - 1));
+    } else if (e.key === 'Enter') {
+      e.preventDefault();
+      if (highlightedIndex >= 0 && highlightedIndex < filteredSuggestions.length) {
+        const selected = filteredSuggestions[highlightedIndex];
+        const status = checkPlayerRosterStatus(selected, currentSeasonRoster, teams, teamId, undefined, activeSeasonId);
+        if (!status) {
+          handleSelectSuggestion(selected);
+        }
+      } else {
+        setIsDropdownOpen(false);
+        handleSubmit(e);
+      }
+    } else if (e.key === 'Escape') {
+      e.preventDefault();
+      setIsDropdownOpen(false);
+      setHighlightedIndex(-1);
     }
   };
 
@@ -218,6 +298,7 @@ export function AddRosterPlayerModal({
                 onFocus={() => {
                   if (searchQuery.trim().length >= 2) setIsDropdownOpen(true);
                 }}
+                onKeyDown={handleKeyDown}
                 placeholder="es. Lautaro, Dimarco, Barella o nome libero..."
                 className="w-full pl-10 pr-3.5 py-2.5 text-sm rounded-xl border border-slate-700 bg-slate-900 text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500"
               />
@@ -225,33 +306,51 @@ export function AddRosterPlayerModal({
 
             {/* Dropdown suggerimenti listone */}
             {isDropdownOpen && filteredSuggestions.length > 0 && (
-              <div className="absolute left-0 right-0 top-full mt-1.5 z-20 rounded-2xl border border-slate-700 bg-[#0f172a] shadow-xl max-h-56 overflow-y-auto p-1.5 space-y-1">
-                {filteredSuggestions.map((sug) => {
+              <div
+                ref={listRef}
+                className="absolute left-0 right-0 top-full mt-1.5 z-20 rounded-2xl border border-slate-700 bg-[#0f172a] shadow-xl max-h-56 overflow-y-auto p-1.5 space-y-1"
+              >
+                {filteredSuggestions.map((sug, idx) => {
                   const b = getRoleBadgeStyles(sug.role);
-                  const isAlreadyBought = alreadyBoughtNames.has(sug.name.toLowerCase().trim());
+                  const status = checkPlayerRosterStatus(sug, currentSeasonRoster, teams, teamId, undefined, activeSeasonId);
+                  const isAlreadyBought = Boolean(status);
+                  const isHighlighted = idx === highlightedIndex;
                   return (
                     <button
                       key={sug.id}
                       type="button"
                       disabled={isAlreadyBought}
                       onClick={() => handleSelectSuggestion(sug)}
-                      className="w-full flex items-center justify-between px-3 py-2 rounded-xl text-left text-xs hover:bg-slate-800 disabled:opacity-40 transition-colors"
+                      onMouseEnter={() => setHighlightedIndex(idx)}
+                      className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-left text-xs transition-colors ${
+                        isHighlighted
+                          ? 'bg-indigo-600/30 border border-indigo-500/50 text-white'
+                          : 'hover:bg-slate-800/80 border border-transparent text-slate-200'
+                      } ${isAlreadyBought ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
                     >
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2 min-w-0">
                         <span
-                          className={`h-5 w-5 rounded font-black text-[10px] flex items-center justify-center border ${b.bg} ${b.text} ${b.border}`}
+                          className={`h-5 w-5 rounded font-black text-[10px] flex items-center justify-center shrink-0 border ${b.bg} ${b.text} ${b.border}`}
                         >
                           {sug.role}
                         </span>
-                        <div>
-                          <div className="font-bold text-white">{sug.name}</div>
-                          <div className="text-[10px] text-slate-400">{sug.team}</div>
+                        <div className="truncate">
+                          <div className="font-bold text-white truncate">{sug.name}</div>
+                          <div className="text-[10px] text-slate-400 truncate">{sug.team}</div>
                         </div>
                       </div>
 
-                      <div className="flex items-center gap-2">
-                        {isAlreadyBought ? (
-                          <span className="text-[10px] text-rose-400 font-semibold">Già in rosa</span>
+                      <div className="flex items-center gap-2 shrink-0 ml-2">
+                        {status ? (
+                          status.inCurrentTeam ? (
+                            <span className="text-[10px] text-amber-300 font-semibold bg-amber-500/15 px-2 py-0.5 rounded-lg border border-amber-500/30">
+                              Già in questa rosa ({status.price} FM)
+                            </span>
+                          ) : (
+                            <span className="text-[10px] text-rose-300 font-semibold bg-rose-500/15 px-2 py-0.5 rounded-lg border border-rose-500/30">
+                              In rosa a {status.teamName} ({status.price} FM)
+                            </span>
+                          )
                         ) : (
                           <span className="font-bold text-amber-400 text-xs">
                             Base: {sug.initial_price} FM

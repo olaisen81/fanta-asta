@@ -54,10 +54,23 @@ export default function RosePage() {
     document.body.removeChild(link);
   };
 
-  const displayedTeams =
+  const normalizedQuery = searchFilter.trim().toLowerCase();
+
+  const displayedTeams = (
     selectedTeamId === 'ALL'
       ? teams
-      : teams.filter((t) => t.id === selectedTeamId);
+      : teams.filter((t) => t.id === selectedTeamId)
+  ).filter((team) => {
+    if (!normalizedQuery) return true;
+    return roster.some((r) => {
+      const matchesTeam = r.team_id === team.id;
+      const matchesSeason = !selectedSeasonId || !r.season_id || r.season_id === selectedSeasonId;
+      const matchesSearch =
+        r.player_name.toLowerCase().includes(normalizedQuery) ||
+        r.serie_a_team.toLowerCase().includes(normalizedQuery);
+      return matchesTeam && matchesSeason && matchesSearch;
+    });
+  });
 
   if (isLoadingData || !isLoggedIn) {
     return <RoseSkeleton />;

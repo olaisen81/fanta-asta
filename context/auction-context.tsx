@@ -180,26 +180,11 @@ export function AuctionProvider({ children }: { children: React.ReactNode }) {
     status: 'idle',
     updated_at: new Date().toISOString(),
   });
-  const [currentUser, setCurrentUser] = useState<UserSession>(() => {
-    if (typeof window !== 'undefined') {
-      try {
-        const saved = localStorage.getItem(LOCAL_STORAGE_KEY);
-        if (saved) {
-          const parsed = JSON.parse(saved);
-          if (parsed.currentUser && parsed.currentUser.email) {
-            return parsed.currentUser;
-          }
-        }
-      } catch {
-        // Fallback
-      }
-    }
-    return {
-      email: '',
-      isAdmin: false,
-      teamId: null,
-      managerName: 'Ospite',
-    };
+  const [currentUser, setCurrentUser] = useState<UserSession>({
+    email: '',
+    isAdmin: false,
+    teamId: null,
+    managerName: 'Ospite',
   });
   const [isRealtimeConnected, setIsRealtimeConnected] = useState<boolean>(true);
   const [activeTeamId, setActiveTeamId] = useState<string | null>(null);

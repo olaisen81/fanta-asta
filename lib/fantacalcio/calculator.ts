@@ -181,3 +181,91 @@ export function getRoleBadgeStyles(role: PlayerRole): {
       };
   }
 }
+
+/**
+ * Normalizza il nome di un calciatore rimuovendo accenti, caratteri speciali, spazi e punteggiatura.
+ */
+export function normalizePlayerName(name: string): string {
+  if (!name) return '';
+  return name
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '') // rimuove accenti
+    .replace(/[^a-z0-9]/g, '') // rimuove spazi, punti, apostrofi, trattini
+    .trim();
+}
+
+export interface PlayerRosterStatus {
+  isAlreadyBought: boolean;
+  isCurrentEditing: boolean; // solo in Edit: è esattamente il calciatore che stiamo modificando
+  inCurrentTeam: boolean; // è assegnato alla squadra attualmente selezionata
+  teamId: string;
+  teamName: string;
+  price: number;
+}
+
+/**
+ * Verifica se un calciatore suggerito è già presente in rosa e restituisce i dettagli di appartenenza.
+ * Controlla esclusivamente i calciatori della stagione attuale/richiesta (ignorando le stagioni archiviate).
+ */
+export function checkPlayerRosterStatus(
+  sug: { id: string; name: string; role: PlayerRole; team?: string },
+  roster: RosterPlayer[],
+  teams: Team[],
+  currentTeamId: string,
+  currentEditingRosterId?: string,
+  targetSeasonId?: string
+): PlayerRosterStatus | null {
+  const sugNorm = normalizePlayerName(sug.name);
+  if (!sugNorm) return null;
+
+  // Cerca tra i calciatori attivi (non svincolati) della stagione attuale
+  const matched = roster.find((r) => {
+    if (r.is_released) return false;
+
+    // Se è indicata una stagione target, ignora i record di altre stagioni archiviate
+    if (targetSeasonId && r.season_id && r.season_id !== targetSeasonId) {
+      return false;
+    }
+
+    // 1. Match per ID listone se presente
+    if (r.player_id && (r.player_id === sug.id || r.player_id === `q-${sug.id}`)) {
+      return true;
+    }
+
+    // 2. Match normalizzato per nome esatto
+    const rNorm = normalizePlayerName(r.player_name);
+    if (rNorm === sugNorm) {
+      return true;
+    }
+
+    // 3. Match con stesso ruolo e squadra Serie A se i nomi contengono l'uno l'altro
+    if (r.role === sug.role && sug.team) {
+      const isSameSerieA =
+        r.serie_a_team?.toLowerCase() === sug.team?.toLowerCase() ||
+        r.serie_a_team === 'Serie A' ||
+        sug.team === 'Serie A';
+
+      if (isSameSerieA && (rNorm.includes(sugNorm) || sugNorm.includes(rNorm))) {
+        return true;
+      }
+    }
+
+    return false;
+  });
+
+  if (!matched) return null;
+
+  const isCurrentEditing = Boolean(currentEditingRosterId && matched.id === currentEditingRosterId);
+  const inCurrentTeam = matched.team_id === currentTeamId;
+  const team = teams.find((t) => t.id === matched.team_id);
+
+  return {
+    isAlreadyBought: true,
+    isCurrentEditing,
+    inCurrentTeam,
+    teamId: matched.team_id,
+    teamName: team?.name || 'Altra squadra',
+    price: matched.price,
+  };
+}
