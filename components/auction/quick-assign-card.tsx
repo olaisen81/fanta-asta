@@ -95,12 +95,6 @@ export function QuickAssignCard({
 
   // Filtraggio calciatori per autocompletamento
   const filteredPlayers = useMemo(() => {
-    if (!searchTerm.trim() && selectedRole === 'ALL') {
-      return players
-        .filter((p) => !purchasedMap.has(p.id) && !purchasedMap.has(p.name.toLowerCase()))
-        .slice(0, 6);
-    }
-
     const term = searchTerm.toLowerCase().trim();
     return players
       .filter((p) => {
@@ -111,7 +105,14 @@ export function QuickAssignCard({
           p.team.toLowerCase().includes(term);
         return matchesRole && matchesText;
       })
-      .slice(0, 10);
+      .sort((a, b) => {
+        const aBought = purchasedMap.has(a.id) || purchasedMap.has(a.name.toLowerCase());
+        const bBought = purchasedMap.has(b.id) || purchasedMap.has(b.name.toLowerCase());
+        if (aBought !== bBought) {
+          return aBought ? 1 : -1;
+        }
+        return a.name.localeCompare(b.name);
+      });
   }, [players, searchTerm, selectedRole, purchasedMap]);
 
   // Statistiche della squadra selezionata
@@ -331,7 +332,7 @@ export function QuickAssignCard({
           </div>
 
           {/* Lista Risultati Calciatori */}
-          <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1">
+          <div className="space-y-1.5 max-h-60 overflow-y-auto pr-1">
             {filteredPlayers.length === 0 ? (
               <div className="py-4 text-center text-xs text-slate-400 bg-slate-900/40 rounded-xl border border-slate-800/60 p-3">
                 <p>Nessun calciatore trovato per "{searchTerm}".</p>
