@@ -13,8 +13,10 @@ import {
   ArrowRight,
   AlertCircle,
   ShieldAlert,
+  User,
 } from 'lucide-react';
 import { isTestLoginEnabled, getAppStage } from '../../lib/config/stage';
+import { INITIAL_TEAMS } from '../../lib/fantacalcio/default-players';
 
 function LoginContent() {
   const router = useRouter();
@@ -28,6 +30,15 @@ function LoginContent() {
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
+  // Teams disponibili con fallback a INITIAL_TEAMS per evitare race condition
+  const availableTeams = teams && teams.length > 0 ? teams : INITIAL_TEAMS;
+
+  // Mostra simulazione rapida se abilitata da config di stage o se c'è ?test=1 nell'URL
+  const isTestActive =
+    isTestLoginEnabled() ||
+    searchParams.get('test') === '1' ||
+    searchParams.get('simulate') === '1';
+
   // Login con Provider Google
   const handleGoogleLogin = async () => {
     try {
@@ -36,7 +47,7 @@ function LoginContent() {
 
       if (!isSupabaseConfigured()) {
         // Modalità dimostrativa: simula login come Admin o primo utente
-        loginAsUser('admin.google@fantaasta.it', 'admin', teams[0]?.id);
+        loginAsUser('admin.google@fantaasta.it', 'admin', availableTeams[0]?.id);
         router.push('/');
         return;
       }
@@ -55,7 +66,7 @@ function LoginContent() {
       const msg = err.message || '';
       if (msg.includes('Unsupported provider') || msg.includes('provider is not enabled')) {
         setErrorMessage(
-          'Il provider Google non è ancora abilitato su Supabase (Authentication > Providers > Google). Nel frattempo puoi usare il pulsante "Entra come Admin" o "Entra come Giocatore" qui sotto per accedere istantaneamente!'
+          'Il provider Google non è ancora abilitato su Supabase (Authentication > Providers > Google). Nel frattempo puoi usare i pulsanti di simulazione o invito email!'
         );
       } else {
         setErrorMessage(msg || 'Errore durante l\'accesso con Google.');
@@ -77,15 +88,18 @@ function LoginContent() {
       setLoading(true);
       setErrorMessage(null);
 
+      const cleanInputEmail = email.trim().toLowerCase();
+
       if (!isSupabaseConfigured()) {
         // Modalità demo locale
-        const matchedTeam = teams.find(
-          (t) => t.manager_email?.toLowerCase() === email.toLowerCase()
+        const matchedTeam = availableTeams.find(
+          (t) => t.manager_email?.toLowerCase() === cleanInputEmail
         );
         const isAdmin = Boolean(
           matchedTeam?.is_admin ||
-          email.toLowerCase().includes('admin') ||
-          email.toLowerCase() === 'fabio.perfetti81@gmail.com'
+          cleanInputEmail.includes('admin') ||
+          cleanInputEmail === 'fabio.perfetti81@gmail.com' ||
+          cleanInputEmail === 'aleperfetti81@gmail.com'
         );
 
         if (!matchedTeam && !isAdmin) {
@@ -95,7 +109,7 @@ function LoginContent() {
           return;
         }
 
-        loginAsUser(email, isAdmin ? 'admin' : 'player', matchedTeam?.id || teams[1]?.id);
+        loginAsUser(cleanInputEmail, isAdmin ? 'admin' : 'player', matchedTeam?.id || availableTeams[1]?.id);
         router.push(isAdmin ? '/' : '/rose');
         return;
       }
@@ -109,14 +123,15 @@ function LoginContent() {
       if (error) throw error;
 
       // Controlla se è federato (admin o squadra)
-      const userEmail = data.user.email || email;
-      const matchedTeam = teams.find(
-        (t) => t.manager_email?.toLowerCase() === userEmail.toLowerCase()
+      const userEmail = (data.user.email || email).trim().toLowerCase();
+      const matchedTeam = availableTeams.find(
+        (t) => t.manager_email?.toLowerCase() === userEmail
       );
       const isAdmin = Boolean(
         matchedTeam?.is_admin ||
-        userEmail.toLowerCase() === 'fabio.perfetti81@gmail.com' ||
-        userEmail.toLowerCase() === process.env.NEXT_PUBLIC_ADMIN_EMAIL?.toLowerCase()
+        userEmail === 'fabio.perfetti81@gmail.com' ||
+        userEmail === 'aleperfetti81@gmail.com' ||
+        userEmail === process.env.NEXT_PUBLIC_ADMIN_EMAIL?.toLowerCase()
       );
 
       if (!matchedTeam && !isAdmin) {
@@ -145,10 +160,10 @@ function LoginContent() {
             <Gavel className="h-7 w-7 text-white" />
           </div>
           <h1 className="text-2xl sm:text-3xl font-black text-white tracking-tight">
-            Accedi a Smadonnante Live
+            Accedi a FantaAsta Live
           </h1>
           <p className="text-xs sm:text-sm text-slate-400">
-            Lega a 10 giocatori
+            Lega a 10 giocatori · Asta in tempo reale
           </p>
         </div>
 
@@ -159,13 +174,13 @@ function LoginContent() {
             <div className="rounded-2xl bg-rose-500/15 border border-rose-500/40 p-4 text-xs text-rose-200 space-y-2 shadow-lg shadow-rose-950/40 animate-in fade-in duration-300">
               <div className="flex items-center gap-2 font-bold text-rose-400 text-sm">
                 <ShieldAlert className="h-5 w-5 shrink-0 text-rose-400" />
-                <span>Accesso Negato: Account non federato</span>
+                <span>Accesso Negato: Account Non Federato</span>
               </div>
               <p className="text-slate-300 leading-relaxed">
                 L'indirizzo {emailParam ? <strong className="text-white font-mono bg-rose-950/60 px-1.5 py-0.5 rounded border border-rose-500/30">{emailParam}</strong> : 'Google'} non appartiene a nessuna delle squadre registrate in questa lega.
               </p>
               <div className="text-[11px] text-slate-400 bg-black/20 p-2.5 rounded-xl border border-rose-500/20 leading-relaxed">
-                💡 Solo gli allenatori registrati e l'amministratore possono accedere a Smadonnante Live. Contatta l'amministratore per farti inserire tra i partecipanti.
+                💡 Solo gli allenatori registrati e l'amministratore possono accedere all'asta. Contatta il banditore per farti inserire tra i partecipanti.
               </div>
             </div>
           )}
@@ -288,39 +303,71 @@ function LoginContent() {
             </button>
           </form>
 
-          {/* SIMULAZIONE ACCESSO RAPIDO (Disattivato in produzione / configurabile tramite stage) */}
-          {isTestLoginEnabled() && (
-            <div className="pt-4 border-t border-slate-800 space-y-2">
+          {/* SIMULAZIONE ACCESSO RAPIDO (Disattivato in produzione pura / attivabile con staging o ?test=1) */}
+          {isTestActive && (
+            <div className="pt-4 border-t border-slate-800 space-y-2.5">
               <div className="flex items-center justify-between text-[11px] font-semibold text-slate-400 uppercase tracking-wider px-1">
-                <span>Test Rapido (Senza Credenziali)</span>
+                <span>Simulazione Accesso Rapido</span>
                 <span className="text-[10px] lowercase px-1.5 py-0.5 rounded bg-slate-800 text-slate-400 font-mono">
                   {getAppStage()}
                 </span>
               </div>
+
+              {/* Bottoni Principali */}
               <div className="grid grid-cols-2 gap-2">
                 <button
                   type="button"
                   onClick={() => {
-                    loginAsUser('fabio.perfetti81@gmail.com', 'admin', teams[0]?.id);
+                    loginAsUser('fabio.perfetti81@gmail.com', 'admin', availableTeams[0]?.id);
                     router.push('/');
                   }}
-                  className="py-2 px-2.5 rounded-xl border border-amber-500/30 bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 text-xs font-bold flex items-center justify-center gap-1.5 transition-colors"
+                  className="py-2 px-2 rounded-xl border border-amber-500/30 bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 text-xs font-bold flex items-center justify-center gap-1.5 transition-colors"
                 >
-                  <ShieldCheck className="h-4 w-4 text-amber-400" />
-                  <span>Entra come Admin</span>
+                  <ShieldCheck className="h-4 w-4 text-amber-400 shrink-0" />
+                  <span className="truncate">Admin (Fabio)</span>
                 </button>
 
                 <button
                   type="button"
                   onClick={() => {
-                    loginAsUser(teams[1]?.manager_email || 'giocatore@fantaasta.it', 'player', teams[1]?.id);
-                    router.push('/rose');
+                    const aleTeam =
+                      availableTeams.find((t) => t.manager_email?.toLowerCase() === 'aleperfetti81@gmail.com') ||
+                      availableTeams.find((t) => t.id === 'team-9');
+                    const isAleAdmin = Boolean(aleTeam?.is_admin ?? true);
+                    loginAsUser('aleperfetti81@gmail.com', isAleAdmin ? 'admin' : 'player', aleTeam?.id || 'team-9');
+                    router.push(isAleAdmin ? '/' : '/rose');
                   }}
-                  className="py-2 px-2.5 rounded-xl border border-sky-500/30 bg-sky-500/10 hover:bg-sky-500/20 text-sky-300 text-xs font-bold flex items-center justify-center gap-1.5 transition-colors"
+                  className="py-2 px-2 rounded-xl border border-emerald-500/30 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-300 text-xs font-bold flex items-center justify-center gap-1.5 transition-colors"
                 >
-                  <UserCheck className="h-4 w-4 text-sky-400" />
-                  <span>Entra come Giocatore</span>
+                  <UserCheck className="h-4 w-4 text-emerald-400 shrink-0" />
+                  <span className="truncate">Simula Ale (Matto Scacco)</span>
                 </button>
+              </div>
+
+              {/* Selettore rapido per simulare qualsiasi delle 10 squadre */}
+              <div className="pt-1">
+                <select
+                  aria-label="Simula accesso rapido squadra"
+                  className="w-full py-1.5 px-2.5 rounded-xl border border-slate-700 bg-slate-900 text-slate-300 text-xs focus:outline-none focus:border-indigo-500 cursor-pointer"
+                  defaultValue=""
+                  onChange={(e) => {
+                    const teamId = e.target.value;
+                    if (!teamId) return;
+                    const selectedTeam = availableTeams.find((t) => t.id === teamId);
+                    if (!selectedTeam) return;
+                    const cleanMail = selectedTeam.manager_email || `${selectedTeam.manager_name.toLowerCase().replace(/\s+/g, '')}@fantaasta.it`;
+                    const role = selectedTeam.is_admin ? 'admin' : 'player';
+                    loginAsUser(cleanMail, role, selectedTeam.id);
+                    router.push(role === 'admin' ? '/' : '/rose');
+                  }}
+                >
+                  <option value="" disabled>Simula accesso come altra squadra...</option>
+                  {availableTeams.map((t) => (
+                    <option key={t.id} value={t.id}>
+                      {t.name} ({t.manager_name} {t.manager_email ? `- ${t.manager_email}` : ''}) {t.is_admin ? '⭐ Admin' : ''}
+                    </option>
+                  ))}
+                </select>
               </div>
             </div>
           )}

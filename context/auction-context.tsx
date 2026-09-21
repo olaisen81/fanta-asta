@@ -58,6 +58,7 @@ export function resolveUserSession(
   const isAdmin = Boolean(
     hasDbAdminFlag ||
     cleanEmail === 'fabio.perfetti81@gmail.com' ||
+    cleanEmail === 'aleperfetti81@gmail.com' ||
     cleanEmail === 'admin@fantaasta.it' ||
     (adminEnv && cleanEmail === adminEnv) ||
     (leagueAdmin && cleanEmail === leagueAdmin) ||
@@ -300,31 +301,61 @@ export function AuctionProvider({ children }: { children: React.ReactNode }) {
 
     const supabase = createClient();
 
+    // Helper unificato per verificare e applicare la sessione
+    const applyAuthSession = async (sessionUser: any) => {
+      const email = sessionUser?.email;
+      if (!email) return;
+
+      // 1. Prova prima con i teams già disponibili in memoria
+      let currentTeams = teams;
+      let resolved = resolveUserSession(email, currentTeams, league, sessionUser.user_metadata);
+
+      // 2. Se sembra non autorizzato, verifica DIRETTAMENTE su Supabase
+      // per prevenire falsi positivi da race condition o mancata sincronizzazione iniziale
+      if (resolved.isUnauthorized && supabaseConfigured) {
+        try {
+          const { data: dbTeams } = await supabase.from('teams').select('*').order('order_index');
+          if (dbTeams && dbTeams.length > 0) {
+            currentTeams = dbTeams;
+            setTeams(dbTeams);
+            resolved = resolveUserSession(email, dbTeams, league, sessionUser.user_metadata);
+          }
+        } catch (err) {
+          console.warn('Errore verifica teams su Supabase:', err);
+        }
+      }
+
+      // 3. Se anche dopo il controllo su DB risulta non autorizzato:
+      if (resolved.isUnauthorized) {
+        await supabase.auth.signOut();
+        const guestSession: UserSession = {
+          email: '',
+          isAdmin: false,
+          teamId: null,
+          managerName: 'Ospite',
+        };
+        setCurrentUser(guestSession);
+        persistStateLocally({ currentUser: guestSession });
+        if (typeof window !== 'undefined' && !window.location.pathname.startsWith('/login')) {
+          window.location.href = `/login?error=unauthorized&email=${encodeURIComponent(email || '')}`;
+        }
+        return;
+      }
+
+      // Sessione autorizzata: aggiorna lo stato
+      setCurrentUser((prev) => {
+        if (prev.isImpersonating) return prev;
+        persistStateLocally({ currentUser: resolved });
+        return resolved;
+      });
+    };
+
     // 1. Recupera sessione al mount
     supabase.auth
       .getSession()
-      .then(({ data: { session } }) => {
-        if (session?.user?.email) {
-          setCurrentUser((prev) => {
-            if (prev.isImpersonating) return prev;
-            const resolved = resolveUserSession(session.user.email, teams, league, session.user.user_metadata);
-            if (resolved.isUnauthorized) {
-              supabase.auth.signOut();
-              const guestSession: UserSession = {
-                email: '',
-                isAdmin: false,
-                teamId: null,
-                managerName: 'Ospite',
-              };
-              persistStateLocally({ currentUser: guestSession });
-              if (typeof window !== 'undefined' && !window.location.pathname.startsWith('/login')) {
-                window.location.href = `/login?error=unauthorized&email=${encodeURIComponent(session.user.email || '')}`;
-              }
-              return guestSession;
-            }
-            persistStateLocally({ currentUser: resolved });
-            return resolved;
-          });
+      .then(async ({ data: { session } }) => {
+        if (session?.user) {
+          await applyAuthSession(session.user);
         }
       })
       .catch((err) => {
@@ -335,28 +366,9 @@ export function AuctionProvider({ children }: { children: React.ReactNode }) {
       });
 
     // 2. Ascolta cambi di login/logout/token in tempo reale
-    const { data: authListener } = supabase.auth.onAuthStateChange((event, session) => {
-      if (session?.user?.email) {
-        setCurrentUser((prev) => {
-          if (prev.isImpersonating) return prev;
-          const resolved = resolveUserSession(session.user.email, teams, league, session.user.user_metadata);
-          if (resolved.isUnauthorized) {
-            supabase.auth.signOut();
-            const guestSession: UserSession = {
-              email: '',
-              isAdmin: false,
-              teamId: null,
-              managerName: 'Ospite',
-            };
-            persistStateLocally({ currentUser: guestSession });
-            if (typeof window !== 'undefined' && !window.location.pathname.startsWith('/login')) {
-              window.location.href = `/login?error=unauthorized&email=${encodeURIComponent(session.user.email || '')}`;
-            }
-            return guestSession;
-          }
-          persistStateLocally({ currentUser: resolved });
-          return resolved;
-        });
+    const { data: authListener } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if (session?.user) {
+        await applyAuthSession(session.user);
       } else if (event === 'SIGNED_OUT') {
         const guestSession: UserSession = {
           email: '',
@@ -459,7 +471,13 @@ export function AuctionProvider({ children }: { children: React.ReactNode }) {
           supabase.from('leagues').select('*').limit(1).maybeSingle(),
         ]);
 
-        if (teamsRes.data && teamsRes.data.length > 0) setTeams(teamsRes.data);
+        if (teamsRes.data && teamsRes.data.length > 0) {
+          setTeams(teamsRes.data);
+          setCurrentUser((prev) => {
+            if (prev.isImpersonating || !prev.email) return prev;
+            return resolveUserSession(prev.email, teamsRes.data, leagueRes.data || league);
+          });
+        }
         if (playersRes.data && playersRes.data.length > 0) setPlayers(playersRes.data);
         if (rosterRes.data) {
           const listone = (playersRes.data && playersRes.data.length > 0)

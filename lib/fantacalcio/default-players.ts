@@ -824,7 +824,7 @@ export const INITIAL_TEAMS = [
     "id": "team-1",
     "league_id": "00000000-0000-0000-0000-000000000001",
     "name": "Birrareal",
-    "manager_name": "Fabio (Admin)",
+    "manager_name": "Fabio",
     "manager_email": "fabio.perfetti81@gmail.com",
     "is_admin": true,
     "initial_budget": 500,
@@ -833,7 +833,7 @@ export const INITIAL_TEAMS = [
   {
     "id": "team-2",
     "league_id": "00000000-0000-0000-0000-000000000001",
-    "name": "Atletico Bulgao",
+    "name": "Herta Vernello",
     "manager_name": "Bulga",
     "initial_budget": 500,
     "order_index": 2
@@ -841,7 +841,7 @@ export const INITIAL_TEAMS = [
   {
     "id": "team-3",
     "league_id": "00000000-0000-0000-0000-000000000001",
-    "name": "Babalu",
+    "name": "Via Canale facci sognare",
     "manager_name": "Cocco",
     "initial_budget": 500,
     "order_index": 3
@@ -849,7 +849,7 @@ export const INITIAL_TEAMS = [
   {
     "id": "team-4",
     "league_id": "00000000-0000-0000-0000-000000000001",
-    "name": "A.C. Circolo Vizioso",
+    "name": "Vamosss Ultimi Pezzi",
     "manager_name": "Marco",
     "initial_budget": 500,
     "order_index": 4
@@ -857,7 +857,7 @@ export const INITIAL_TEAMS = [
   {
     "id": "team-5",
     "league_id": "00000000-0000-0000-0000-000000000001",
-    "name": "Pol. Porca Puttena",
+    "name": "AC Panzerottina",
     "manager_name": "Loppo",
     "initial_budget": 500,
     "order_index": 5
@@ -889,8 +889,10 @@ export const INITIAL_TEAMS = [
   {
     "id": "team-9",
     "league_id": "00000000-0000-0000-0000-000000000001",
-    "name": "Real Perfect Team",
+    "name": "Matto Scacco",
     "manager_name": "Ale",
+    "manager_email": "aleperfetti81@gmail.com",
+    "is_admin": true,
     "initial_budget": 500,
     "order_index": 9
   },
