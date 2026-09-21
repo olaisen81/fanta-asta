@@ -25,7 +25,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="it" className="dark h-full">
+    <html lang="it" className="dark h-full" style={{ colorScheme: 'dark' }}>
       <body className="min-h-full flex flex-col bg-[#090d16] text-slate-100 antialiased selection:bg-indigo-500 selection:text-white font-sans pb-16 md:pb-0">
         <AuctionProvider>
           <Navbar />
