@@ -24,7 +24,18 @@ import { ListoneSkeleton } from '../../components/auction/skeletons';
 
 export default function ListonePage() {
   const router = useRouter();
-  const { players, roster, teams, currentUser, callPlayer, importPlayers, isLoadingData, isLoggedIn } = useAuction();
+  const {
+    players,
+    roster,
+    teams,
+    seasons,
+    selectedSeasonId,
+    currentUser,
+    callPlayer,
+    importPlayers,
+    isLoadingData,
+    isLoggedIn,
+  } = useAuction();
 
   useEffect(() => {
     if (!isLoadingData && !isLoggedIn) {
@@ -46,6 +57,16 @@ export default function ListonePage() {
   } | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Determina la stagione attiva (is_current)
+  const activeSeasonId = useMemo(() => {
+    return seasons.find((s) => s.is_current)?.id || selectedSeasonId || '2026-2027';
+  }, [seasons, selectedSeasonId]);
+
+  const currentSeasonRoster = useMemo(() => {
+    if (!activeSeasonId) return roster;
+    return roster.filter((r) => r.season_id === activeSeasonId);
+  }, [roster, activeSeasonId]);
 
   // Controlla la presenza del file Quotazioni locale nel progetto
   useEffect(() => {
@@ -80,17 +101,27 @@ export default function ListonePage() {
     }
   };
 
-  // Mappa dei calciatori acquistati
+  // Mappa dei calciatori acquistati (solo stagione corrente e non svincolati)
   const purchasedMap = useMemo(() => {
     const map = new Map<string, { teamName: string; price: number }>();
-    for (const r of roster) {
+    for (const r of currentSeasonRoster) {
+      if (r.is_released) continue;
       const team = teams.find((t) => t.id === r.team_id);
       const teamName = team ? team.name : 'Squadra';
       if (r.player_id) map.set(r.player_id, { teamName, price: r.price });
-      map.set(r.player_name.toLowerCase(), { teamName, price: r.price });
+      map.set(r.player_name.toLowerCase().trim(), { teamName, price: r.price });
     }
     return map;
-  }, [roster, teams]);
+  }, [currentSeasonRoster, teams]);
+
+  // Conteggi complessivi
+  const activeRosterCount = useMemo(() => {
+    return currentSeasonRoster.filter((r) => !r.is_released).length;
+  }, [currentSeasonRoster]);
+
+  const freePlayersCount = useMemo(() => {
+    return Math.max(0, players.length - activeRosterCount);
+  }, [players.length, activeRosterCount]);
 
   // Lista di tutti i club unici di Serie A presenti nel listone
   const allClubs = useMemo(() => {
@@ -171,7 +202,8 @@ export default function ListonePage() {
             Listone Calciatori Serie A
           </h1>
           <p className="text-xs sm:text-sm text-slate-400 mt-0.5">
-            {players.length} calciatori caricati · {roster.length} acquistati · {players.length - roster.length} disponibili
+            {players.length} calciatori caricati · {activeRosterCount} in rosa ·{' '}
+            <span className="text-emerald-400 font-semibold">{freePlayersCount} svincolati / liberi</span>
           </p>
         </div>
 
@@ -281,7 +313,7 @@ export default function ListonePage() {
       <div className="rounded-2xl border border-slate-800 bg-[#0e1628] p-3 sm:p-4 space-y-3 shadow-lg">
         <div className="grid grid-cols-1 sm:grid-cols-12 gap-3">
           {/* Ricerca Testo */}
-          <div className="sm:col-span-5 relative">
+          <div className="sm:col-span-7 relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
             <input
               type="text"
@@ -301,7 +333,7 @@ export default function ListonePage() {
           </div>
 
           {/* Filtro Squadra Club Serie A */}
-          <div className="sm:col-span-4">
+          <div className="sm:col-span-5">
             <select
               value={selectedClub}
               onChange={(e) => setSelectedClub(e.target.value)}
@@ -315,46 +347,84 @@ export default function ListonePage() {
               ))}
             </select>
           </div>
+        </div>
 
-          {/* Filtro Stato */}
-          <div className="sm:col-span-3">
-            <select
-              value={selectedStatus}
-              onChange={(e) => setSelectedStatus(e.target.value as any)}
-              className="w-full px-3 py-2 text-xs sm:text-sm rounded-xl border border-slate-700 bg-slate-900 text-white focus:outline-none focus:border-indigo-500"
+        {/* Filtri Ruolo & Filtri Stato Calciatore */}
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-2.5 pt-2 border-t border-slate-800/80">
+          {/* Filtri Ruolo (P, D, C, A) */}
+          <div className="flex items-center gap-1.5 overflow-x-auto pb-1 lg:pb-0 scrollbar-none">
+            {(['ALL', 'P', 'D', 'C', 'A'] as const).map((r) => {
+              const isAll = r === 'ALL';
+              const isSelected = selectedRole === r;
+              const badge = isAll ? null : getRoleBadgeStyles(r as PlayerRole);
+
+              return (
+                <button
+                  key={r}
+                  type="button"
+                  onClick={() => setSelectedRole(r)}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all ${
+                    isSelected
+                      ? isAll
+                        ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/30'
+                        : `${badge?.bg} ${badge?.text} border ${badge?.border}`
+                      : 'bg-slate-850 border border-slate-750 text-slate-300 hover:text-white'
+                  }`}
+                >
+                  {isAll ? 'Tutti i Ruoli' : `${r} - ${badge?.label}`}
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Filtro Stato Svincolati / In Rosa */}
+          <div className="flex items-center gap-1 bg-slate-900/90 p-1 rounded-xl border border-slate-800 self-start sm:self-auto overflow-x-auto max-w-full">
+            <button
+              type="button"
+              onClick={() => setSelectedStatus('ALL')}
+              className={`px-3 py-1 rounded-lg text-xs font-semibold whitespace-nowrap transition-all ${
+                selectedStatus === 'ALL'
+                  ? 'bg-slate-750 text-white shadow-sm'
+                  : 'text-slate-400 hover:text-white'
+              }`}
             >
-              <option value="ALL">Tutti gli stati</option>
-              <option value="FREE">Solo Calciatori Liberi</option>
-              <option value="BOUGHT">Solo Calciatori Acquistati</option>
-            </select>
+              Tutti
+            </button>
+            <button
+              type="button"
+              onClick={() => setSelectedStatus('FREE')}
+              className={`px-3 py-1 rounded-lg text-xs font-semibold whitespace-nowrap flex items-center gap-1.5 transition-all ${
+                selectedStatus === 'FREE'
+                  ? 'bg-emerald-600 text-white shadow-sm shadow-emerald-600/30'
+                  : 'text-emerald-400 hover:text-emerald-300'
+              }`}
+            >
+              <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
+              <span>Svincolati / Liberi</span>
+              <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-emerald-950/60 border border-emerald-500/30 text-emerald-300">
+                {freePlayersCount}
+              </span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setSelectedStatus('BOUGHT')}
+              className={`px-3 py-1 rounded-lg text-xs font-semibold whitespace-nowrap flex items-center gap-1.5 transition-all ${
+                selectedStatus === 'BOUGHT'
+                  ? 'bg-indigo-600 text-white shadow-sm shadow-indigo-600/30'
+                  : 'text-indigo-400 hover:text-indigo-300'
+              }`}
+            >
+              <CheckCircle2 className="h-3 w-3" />
+              <span>In Rosa</span>
+              <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-indigo-950/60 border border-indigo-500/30 text-indigo-300">
+                {activeRosterCount}
+              </span>
+            </button>
           </div>
         </div>
-
-        {/* Filtri Ruolo (P, D, C, A) */}
-        <div className="flex items-center gap-1.5 overflow-x-auto pt-1 scrollbar-none">
-          {(['ALL', 'P', 'D', 'C', 'A'] as const).map((r) => {
-            const isAll = r === 'ALL';
-            const isSelected = selectedRole === r;
-            const badge = isAll ? null : getRoleBadgeStyles(r as PlayerRole);
-
-            return (
-              <button
-                key={r}
-                onClick={() => setSelectedRole(r)}
-                className={`px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all ${
-                  isSelected
-                    ? isAll
-                      ? 'bg-indigo-600 text-white shadow-md'
-                      : `${badge?.bg} ${badge?.text} border ${badge?.border}`
-                    : 'bg-slate-850 border border-slate-750 text-slate-300 hover:text-white'
-                }`}
-              >
-                {isAll ? 'Tutti i Ruoli' : `${r} - ${badge?.label}`}
-              </button>
-            );
-          })}
-        </div>
       </div>
+
+
 
       {/* Tabella Calciatori */}
       <div className="rounded-3xl border border-slate-800 bg-[#0e1628] overflow-hidden shadow-xl">
@@ -424,15 +494,16 @@ export default function ListonePage() {
                       {/* Stato Asta */}
                       <td className="py-3 px-4">
                         {isPurchased ? (
-                          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-                            <CheckCircle2 className="h-3.5 w-3.5" />
+                          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold bg-indigo-500/10 text-indigo-300 border border-indigo-500/20">
+                            <CheckCircle2 className="h-3.5 w-3.5 text-indigo-400" />
                             <span>
                               {purchasedInfo?.teamName} ({purchasedInfo?.price} FM)
                             </span>
                           </span>
                         ) : (
-                          <span className="inline-flex items-center px-2 py-0.5 rounded-md text-xs text-slate-400 bg-slate-800/60">
-                            Libero
+                          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                            <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
+                            <span>Svincolato</span>
                           </span>
                         )}
                       </td>

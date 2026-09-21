@@ -38,6 +38,8 @@ export function QuickAssignCard({
     players,
     roster,
     teams,
+    seasons,
+    selectedSeasonId,
     teamsStats,
     currentUser,
     league,
@@ -51,6 +53,7 @@ export function QuickAssignCard({
 
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedRole, setSelectedRole] = useState<PlayerRole | 'ALL'>('ALL');
+  const [selectedStatus, setSelectedStatus] = useState<'ALL' | 'FREE' | 'BOUGHT'>('ALL');
   const [selectedPlayer, setSelectedPlayer] = useState<Player | null>(null);
   const [selectedTeamId, setSelectedTeamId] = useState<string>(
     preSelectedTeamId || teams[0]?.id || ''
@@ -61,37 +64,37 @@ export function QuickAssignCard({
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const [showBonusModal, setShowBonusModal] = useState(false);
 
-  // Auto-seleziona calciatore da query param URL (es. da pagina listone)
-  useEffect(() => {
-    if (playerParam && players.length > 0) {
-      const found = players.find(
-        (p) => p.name.toLowerCase() === playerParam.toLowerCase()
-      );
-      if (found) {
-        setSelectedPlayer(found);
-        setPrice(found.initial_price || 1);
-      }
-    }
-  }, [playerParam, players]);
+  // Determina la stagione attiva (escludendo stagioni storiche)
+  const activeSeasonId = useMemo(() => {
+    return seasons.find((s) => s.is_current)?.id || selectedSeasonId || '2026-2027';
+  }, [seasons, selectedSeasonId]);
 
-  // Sincronizza squadra pre-selezionata se passata da props
-  useEffect(() => {
-    if (preSelectedTeamId) {
-      setSelectedTeamId(preSelectedTeamId);
-    }
-  }, [preSelectedTeamId]);
+  const currentSeasonRoster = useMemo(() => {
+    if (!activeSeasonId) return roster;
+    return roster.filter((r) => r.season_id === activeSeasonId);
+  }, [roster, activeSeasonId]);
 
-  // Mappa dei calciatori già assegnati
+  // Mappa dei calciatori già assegnati nella stagione attiva
   const purchasedMap = useMemo(() => {
     const map = new Map<string, { teamName: string; price: number }>();
-    for (const r of roster) {
+    for (const r of currentSeasonRoster) {
+      if (r.is_released) continue;
       const team = teams.find((t) => t.id === r.team_id);
       const teamName = team ? team.name : 'Squadra';
       if (r.player_id) map.set(r.player_id, { teamName, price: r.price });
-      map.set(r.player_name.toLowerCase(), { teamName, price: r.price });
+      map.set(r.player_name.toLowerCase().trim(), { teamName, price: r.price });
     }
     return map;
-  }, [roster, teams]);
+  }, [currentSeasonRoster, teams]);
+
+  // Conteggi complessivi
+  const activeRosterCount = useMemo(() => {
+    return currentSeasonRoster.filter((r) => !r.is_released).length;
+  }, [currentSeasonRoster]);
+
+  const freePlayersCount = useMemo(() => {
+    return Math.max(0, players.length - activeRosterCount);
+  }, [players.length, activeRosterCount]);
 
   // Filtraggio calciatori per autocompletamento
   const filteredPlayers = useMemo(() => {
@@ -103,17 +106,23 @@ export function QuickAssignCard({
           !term ||
           p.name.toLowerCase().includes(term) ||
           p.team.toLowerCase().includes(term);
+
+        const isBought =
+          purchasedMap.has(p.id) || purchasedMap.has(p.name.toLowerCase().trim());
+        if (selectedStatus === 'FREE' && isBought) return false;
+        if (selectedStatus === 'BOUGHT' && !isBought) return false;
+
         return matchesRole && matchesText;
       })
       .sort((a, b) => {
-        const aBought = purchasedMap.has(a.id) || purchasedMap.has(a.name.toLowerCase());
-        const bBought = purchasedMap.has(b.id) || purchasedMap.has(b.name.toLowerCase());
+        const aBought = purchasedMap.has(a.id) || purchasedMap.has(a.name.toLowerCase().trim());
+        const bBought = purchasedMap.has(b.id) || purchasedMap.has(b.name.toLowerCase().trim());
         if (aBought !== bBought) {
           return aBought ? 1 : -1;
         }
         return a.name.localeCompare(b.name);
       });
-  }, [players, searchTerm, selectedRole, purchasedMap]);
+  }, [players, searchTerm, selectedRole, selectedStatus, purchasedMap]);
 
   // Statistiche della squadra selezionata
   const selectedTeamStat = teamsStats.find((s) => s.team.id === selectedTeamId);
@@ -305,30 +314,78 @@ export function QuickAssignCard({
             )}
           </div>
 
-          {/* Filtro Ruoli Rapidi */}
-          <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none">
-            {(['ALL', 'P', 'D', 'C', 'A'] as const).map((r) => {
-              const isAll = r === 'ALL';
-              const isSelected = selectedRole === r;
-              const b = isAll ? null : getRoleBadgeStyles(r as PlayerRole);
+          {/* Filtro Ruoli e Filtro Stato Svincolati */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+            {/* Filtro Ruoli Rapidi */}
+            <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5 scrollbar-none">
+              {(['ALL', 'P', 'D', 'C', 'A'] as const).map((r) => {
+                const isAll = r === 'ALL';
+                const isSelected = selectedRole === r;
+                const b = isAll ? null : getRoleBadgeStyles(r as PlayerRole);
 
-              return (
-                <button
-                  key={r}
-                  type="button"
-                  onClick={() => setSelectedRole(r)}
-                  className={`px-2.5 py-1 rounded-lg text-xs font-semibold whitespace-nowrap transition-all ${
-                    isSelected
-                      ? isAll
-                        ? 'bg-indigo-600 text-white'
-                        : `${b?.bg} ${b?.text} border ${b?.border}`
-                      : 'bg-slate-800 text-slate-400 hover:text-white'
-                  }`}
-                >
-                  {isAll ? 'Tutti' : `${r} - ${b?.label}`}
-                </button>
-              );
-            })}
+                return (
+                  <button
+                    key={r}
+                    type="button"
+                    onClick={() => setSelectedRole(r)}
+                    className={`px-2.5 py-1 rounded-lg text-xs font-semibold whitespace-nowrap transition-all ${
+                      isSelected
+                        ? isAll
+                          ? 'bg-indigo-600 text-white shadow-sm'
+                          : `${b?.bg} ${b?.text} border ${b?.border}`
+                        : 'bg-slate-800 text-slate-400 hover:text-white'
+                    }`}
+                  >
+                    {isAll ? 'Tutti' : `${r} - ${b?.label}`}
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Filtro Stato Svincolati / In Rosa */}
+            <div className="flex items-center gap-1 bg-slate-900/90 p-0.5 rounded-lg border border-slate-800 self-start sm:self-auto overflow-x-auto max-w-full">
+              <button
+                type="button"
+                onClick={() => setSelectedStatus('ALL')}
+                className={`px-2.5 py-0.5 rounded text-[11px] font-semibold whitespace-nowrap transition-all ${
+                  selectedStatus === 'ALL'
+                    ? 'bg-slate-750 text-white'
+                    : 'text-slate-400 hover:text-white'
+                }`}
+              >
+                Tutti
+              </button>
+              <button
+                type="button"
+                onClick={() => setSelectedStatus('FREE')}
+                className={`px-2 py-0.5 rounded text-[11px] font-semibold whitespace-nowrap flex items-center gap-1 transition-all ${
+                  selectedStatus === 'FREE'
+                    ? 'bg-emerald-600 text-white shadow-sm shadow-emerald-600/30'
+                    : 'text-emerald-400 hover:text-emerald-300'
+                }`}
+              >
+                <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
+                <span>Svincolati</span>
+                <span className="text-[10px] px-1 py-0.2 rounded-full bg-emerald-950/60 border border-emerald-500/30 text-emerald-300">
+                  {freePlayersCount}
+                </span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setSelectedStatus('BOUGHT')}
+                className={`px-2 py-0.5 rounded text-[11px] font-semibold whitespace-nowrap flex items-center gap-1 transition-all ${
+                  selectedStatus === 'BOUGHT'
+                    ? 'bg-indigo-600 text-white shadow-sm shadow-indigo-600/30'
+                    : 'text-indigo-400 hover:text-indigo-300'
+                }`}
+              >
+                <CheckCircle2 className="h-2.5 w-2.5" />
+                <span>In Rosa</span>
+                <span className="text-[10px] px-1 py-0.2 rounded-full bg-indigo-950/60 border border-indigo-500/30 text-indigo-300">
+                  {activeRosterCount}
+                </span>
+              </button>
+            </div>
           </div>
 
           {/* Lista Risultati Calciatori */}
@@ -348,7 +405,8 @@ export function QuickAssignCard({
             ) : (
               filteredPlayers.map((player) => {
                 const boughtInfo =
-                  purchasedMap.get(player.id) || purchasedMap.get(player.name.toLowerCase());
+                  purchasedMap.get(player.id) ||
+                  purchasedMap.get(player.name.toLowerCase().trim());
                 const isBought = Boolean(boughtInfo);
                 const b = getRoleBadgeStyles(player.role);
 
