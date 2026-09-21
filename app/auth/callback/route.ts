@@ -10,14 +10,24 @@ export async function GET(request: Request) {
   const next = searchParams.get('next') ?? '/';
 
   // In produzione su Vercel / proxy, request.url potrebbe contenere localhost:3000 interno;
-  // leggiamo x-forwarded-host e x-forwarded-proto per usare il dominio pubblico effettivo.
+  // leggiamo x-forwarded-host e host per determinare con certezza il dominio pubblico.
   const forwardedHost = request.headers.get('x-forwarded-host');
-  const forwardedProto = request.headers.get('x-forwarded-proto') || 'https';
-  const isLocalEnv = process.env.NODE_ENV === 'development';
+  const hostHeader = request.headers.get('host');
+  const forwardedProto = request.headers.get('x-forwarded-proto');
+
+  const publicHost = forwardedHost || hostHeader;
+  const isLocal = !publicHost || publicHost.includes('localhost') || publicHost.includes('127.0.0.1');
 
   let targetOrigin = origin;
-  if (!isLocalEnv && forwardedHost) {
-    targetOrigin = `${forwardedProto}://${forwardedHost}`;
+  if (!isLocal && publicHost) {
+    const proto = forwardedProto || 'https';
+    targetOrigin = `${proto}://${publicHost}`;
+  } else if (!isLocal && process.env.NEXT_PUBLIC_SITE_URL) {
+    targetOrigin = process.env.NEXT_PUBLIC_SITE_URL;
+  }
+
+  if (targetOrigin.endsWith('/')) {
+    targetOrigin = targetOrigin.slice(0, -1);
   }
 
   if (code && isSupabaseConfigured()) {

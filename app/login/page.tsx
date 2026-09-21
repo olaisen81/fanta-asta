@@ -53,11 +53,17 @@ function LoginContent() {
       }
 
       const supabase = createClient();
-      const origin = typeof window !== 'undefined' ? window.location.origin : '';
+      const origin =
+        typeof window !== 'undefined' && window.location.origin
+          ? window.location.origin
+          : (process.env.NEXT_PUBLIC_SITE_URL || '');
+      const cleanOrigin = origin.replace(/\/+$/, '');
+      const redirectUri = cleanOrigin ? `${cleanOrigin}/auth/callback` : undefined;
+
       const { error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
-          redirectTo: `${origin}/auth/callback`,
+          redirectTo: redirectUri,
         },
       });
 
