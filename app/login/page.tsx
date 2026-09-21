@@ -98,8 +98,7 @@ function LoginContent() {
         const isAdmin = Boolean(
           matchedTeam?.is_admin ||
           cleanInputEmail.includes('admin') ||
-          cleanInputEmail === 'fabio.perfetti81@gmail.com' ||
-          cleanInputEmail === 'aleperfetti81@gmail.com'
+          cleanInputEmail === 'fabio.perfetti81@gmail.com'
         );
 
         if (!matchedTeam && !isAdmin) {
@@ -130,7 +129,6 @@ function LoginContent() {
       const isAdmin = Boolean(
         matchedTeam?.is_admin ||
         userEmail === 'fabio.perfetti81@gmail.com' ||
-        userEmail === 'aleperfetti81@gmail.com' ||
         userEmail === process.env.NEXT_PUBLIC_ADMIN_EMAIL?.toLowerCase()
       );
 
@@ -160,10 +158,10 @@ function LoginContent() {
             <Gavel className="h-7 w-7 text-white" />
           </div>
           <h1 className="text-2xl sm:text-3xl font-black text-white tracking-tight">
-            Accedi a FantaAsta Live
+            Accedi a Smadonnante Live
           </h1>
           <p className="text-xs sm:text-sm text-slate-400">
-            Lega a 10 giocatori · Asta in tempo reale
+            Lega a 10 giocatori
           </p>
         </div>
 
@@ -333,7 +331,7 @@ function LoginContent() {
                     const aleTeam =
                       availableTeams.find((t) => t.manager_email?.toLowerCase() === 'aleperfetti81@gmail.com') ||
                       availableTeams.find((t) => t.id === 'team-9');
-                    const isAleAdmin = Boolean(aleTeam?.is_admin ?? true);
+                    const isAleAdmin = Boolean(aleTeam?.is_admin);
                     loginAsUser('aleperfetti81@gmail.com', isAleAdmin ? 'admin' : 'player', aleTeam?.id || 'team-9');
                     router.push(isAleAdmin ? '/' : '/rose');
                   }}

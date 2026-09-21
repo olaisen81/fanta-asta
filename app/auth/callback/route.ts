@@ -19,7 +19,6 @@ export async function GET(request: Request) {
 
         const isMasterAdmin =
           userEmail === 'fabio.perfetti81@gmail.com' ||
-          userEmail === 'aleperfetti81@gmail.com' ||
           userEmail === 'admin@fantaasta.it' ||
           (adminEmail && userEmail === adminEmail);
 

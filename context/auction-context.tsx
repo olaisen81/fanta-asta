@@ -58,7 +58,6 @@ export function resolveUserSession(
   const isAdmin = Boolean(
     hasDbAdminFlag ||
     cleanEmail === 'fabio.perfetti81@gmail.com' ||
-    cleanEmail === 'aleperfetti81@gmail.com' ||
     cleanEmail === 'admin@fantaasta.it' ||
     (adminEnv && cleanEmail === adminEnv) ||
     (leagueAdmin && cleanEmail === leagueAdmin) ||
