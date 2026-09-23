@@ -4,7 +4,7 @@ import { AuctionProvider } from "../context/auction-context";
 import { Navbar } from "../components/navbar";
 
 export const metadata: Metadata = {
-  title: "FantaAsta Live - Gestione Asta Fantacalcio a 10",
+  title: "Smadonnante Live - Gestione Fantacalcio",
   description: "Applicazione web in tempo reale per la gestione e il monitoraggio dell'asta del Fantacalcio per leghe a 10 squadre.",
   icons: {
     icon: "/favicon.ico",
