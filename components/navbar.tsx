@@ -23,6 +23,7 @@ import {
   Eye,
 } from 'lucide-react';
 import { useAuction } from '../context/auction-context';
+import logo from '../public/logo.png';
 
 export function Navbar() {
   const pathname = usePathname();
@@ -108,7 +109,8 @@ export function Navbar() {
               className="flex items-center gap-2 group"
             >
               <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-tr from-indigo-500 to-emerald-500 shadow-md shadow-emerald-500/20 group-hover:scale-105 transition-transform">
-                <UserPlus className="h-5 w-5 text-white" />
+                {/* <UserPlus className="h-5 w-5 text-white" /> */}
+                <img src="/logo.png" alt="Logo" />
               </div>
               <div className="flex flex-col">
                 <span className="font-extrabold text-base sm:text-lg tracking-tight text-white leading-none flex items-center gap-1.5">

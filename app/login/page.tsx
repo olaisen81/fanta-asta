@@ -160,8 +160,9 @@ function LoginContent() {
       <div className="w-full max-w-md space-y-6">
         {/* Brand Header */}
         <div className="text-center space-y-2">
-          <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-tr from-amber-500 to-rose-500 shadow-lg shadow-rose-500/25">
-            <Gavel className="h-7 w-7 text-white" />
+          <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-tr from-indigo-500 to-rose-500 shadow-lg shadow-rose-500/25">
+            {/* <Gavel className="h-7 w-7 text-white" /> */}
+                <img src="/logo.png" alt="Logo" />
           </div>
           <h1 className="text-2xl sm:text-3xl font-black text-white tracking-tight">
             Accedi a Smadonnante Live
