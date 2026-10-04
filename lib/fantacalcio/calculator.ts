@@ -272,17 +272,54 @@ export function checkPlayerRosterStatus(
 
 /**
  * Estrae l'elenco dei fanta-allenatori (1 o più) associati a una squadra.
- * Supporta sia il formato strutturato `team.managers` che il parsing retrocompatibile di `team.manager_name` e `team.manager_email`.
+ * Supporta sia il formato strutturato `team.managers` (array, oggetto, stringa JSON)
+ * che il parsing retrocompatibile di `team.manager_name` e `team.manager_email`.
  */
 export function getTeamManagers(
-  team?: Partial<Team> | { manager_name?: string; manager_email?: string | null; managers?: TeamManager[] } | null
+  team?: Partial<Team> | { manager_name?: string; manager_email?: string | null; managers?: any } | null
 ): TeamManager[] {
   if (!team) return [];
 
-  if (Array.isArray(team.managers) && team.managers.length > 0) {
-    const valid = team.managers
-      .map((m) => ({ name: (m.name || '').trim(), email: (m.email || '').trim() || null }))
-      .filter((m) => m.name.length > 0);
+  let rawManagers = team.managers;
+
+  // Se i managers sono passati come stringa JSON (es. da Supabase/Postgres)
+  if (typeof rawManagers === 'string' && rawManagers.trim().length > 0) {
+    try {
+      rawManagers = JSON.parse(rawManagers);
+    } catch {
+      // Se non è JSON valido, potrebbe essere una lista separata da virgole
+      const parts = rawManagers.split(/[,;/+]+/).map((s: string) => s.trim()).filter(Boolean);
+      if (parts.length > 0) {
+        rawManagers = parts.map((p: string) => ({ name: p, email: p.includes('@') ? p : null }));
+      }
+    }
+  }
+
+  // Se è un oggetto singolo { name, email } invece di un array
+  if (rawManagers && typeof rawManagers === 'object' && !Array.isArray(rawManagers)) {
+    if ('name' in rawManagers || 'email' in rawManagers) {
+      rawManagers = [rawManagers];
+    } else {
+      rawManagers = Object.values(rawManagers);
+    }
+  }
+
+  if (Array.isArray(rawManagers) && rawManagers.length > 0) {
+    const valid: TeamManager[] = [];
+    for (const m of rawManagers) {
+      if (typeof m === 'string') {
+        const trimmed = m.trim();
+        if (trimmed) {
+          valid.push({ name: trimmed.includes('@') ? trimmed.split('@')[0] : trimmed, email: trimmed.includes('@') ? trimmed : null });
+        }
+      } else if (m && typeof m === 'object') {
+        const name = (m.name || m.manager_name || (m.email ? String(m.email).split('@')[0] : '') || '').trim();
+        const email = (m.email || m.manager_email || '').trim() || null;
+        if (name || email) {
+          valid.push({ name: name || (email ? email.split('@')[0] : 'Fantallenatore'), email });
+        }
+      }
+    }
     if (valid.length > 0) return valid;
   }
 
@@ -290,13 +327,16 @@ export function getTeamManagers(
   const rawEmail = (team.manager_email || '').trim();
 
   if (!rawName) {
-    if (rawEmail) return [{ name: rawEmail.split('@')[0], email: rawEmail }];
+    if (rawEmail) {
+      const emailParts = rawEmail.split(/[,;/+]+/).map((s) => s.trim()).filter(Boolean);
+      return emailParts.map((em) => ({ name: em.split('@')[0], email: em }));
+    }
     return [];
   }
 
-  // Se contiene separatori come "/", "&", "+", o "," per più allenatori
+  // Se contiene separatori come "/", "&", "+", ",", " e " per più allenatori
   const nameParts = rawName
-    .split(/[/&+]/)
+    .split(/[/&+,]|\s+e\s+/i)
     .map((s) => s.trim())
     .filter(Boolean);
 
@@ -304,11 +344,15 @@ export function getTeamManagers(
     ? rawEmail.split(/[,;/+]+/).map((s) => s.trim()).filter(Boolean)
     : [];
 
-  if (nameParts.length > 1) {
-    return nameParts.map((name, idx) => ({
-      name,
-      email: emailParts[idx] || (idx === 0 && emailParts.length === 1 ? emailParts[0] : null),
-    }));
+  if (nameParts.length > 1 || emailParts.length > 1) {
+    const maxLen = Math.max(nameParts.length, emailParts.length);
+    const result: TeamManager[] = [];
+    for (let i = 0; i < maxLen; i++) {
+      const name = nameParts[i] || (emailParts[i] ? emailParts[i].split('@')[0] : `Allenatore ${i + 1}`);
+      const email = emailParts[i] || (i === 0 && emailParts.length === 1 ? emailParts[0] : null);
+      result.push({ name, email });
+    }
+    return result;
   }
 
   return [
@@ -323,13 +367,13 @@ export function getTeamManagers(
  * Restituisce una stringa formattata con i nomi di tutti i fantallenatori della squadra (es. "Fabio" oppure "Fabio & Bulga").
  */
 export function formatManagerNames(
-  teamOrManagers?: Partial<Team> | TeamManager[] | { manager_name?: string; managers?: TeamManager[] } | null,
+  teamOrManagers?: Partial<Team> | TeamManager[] | { manager_name?: string; managers?: any } | null,
   separator: string = ' & '
 ): string {
   if (!teamOrManagers) return '';
   if (Array.isArray(teamOrManagers)) {
     return teamOrManagers
-      .map((m) => m.name?.trim())
+      .map((m) => (typeof m === 'string' ? m : m.name?.trim()))
       .filter(Boolean)
       .join(separator);
   }
@@ -344,7 +388,7 @@ export function formatManagerNames(
  * Restituisce una stringa formattata con le email di tutti i fantallenatori.
  */
 export function formatManagerEmails(
-  teamOrManagers?: Partial<Team> | TeamManager[] | { manager_email?: string | null; managers?: TeamManager[] } | null,
+  teamOrManagers?: Partial<Team> | TeamManager[] | { manager_email?: string | null; managers?: any } | null,
   separator: string = ', '
 ): string {
   if (!teamOrManagers) return '';
@@ -361,22 +405,43 @@ export function formatManagerEmails(
  * Verifica se un indirizzo email corrisponde a uno dei fantallenatori della squadra.
  */
 export function teamMatchesEmail(team: Team, email: string): boolean {
-  if (!email) return false;
+  if (!email || !team) return false;
   const clean = email.trim().toLowerCase();
-  if (team.manager_email && team.manager_email.trim().toLowerCase() === clean) return true;
-  if (team.manager_email && team.manager_email.toLowerCase().includes(clean)) {
-    const parts = team.manager_email.toLowerCase().split(/[,;/+\s]+/).map((s) => s.trim());
+
+  // 1. Controllo diretto su manager_email
+  if (team.manager_email) {
+    const rawEmails = team.manager_email.toLowerCase();
+    if (rawEmails === clean) return true;
+    const parts = rawEmails.split(/[,;/+\s]+/).map((s) => s.trim()).filter(Boolean);
     if (parts.includes(clean)) return true;
   }
+
+  // 2. Controllo tramite elenco strutturato managers
   const managers = getTeamManagers(team);
-  return managers.some((m) => m.email && m.email.trim().toLowerCase() === clean);
+  if (managers.some((m) => m.email && m.email.trim().toLowerCase() === clean)) {
+    return true;
+  }
+
+  // 3. Fallback: controllo se managers grezzo contiene l'email come sottostringa
+  if (team.managers) {
+    try {
+      const rawStr = typeof team.managers === 'string' ? team.managers : JSON.stringify(team.managers);
+      if (rawStr.toLowerCase().includes(clean)) {
+        return true;
+      }
+    } catch {
+      // Ignora errore serializzazione
+    }
+  }
+
+  return false;
 }
 
 /**
  * Trova il fantallenatore specifico associato all'email data.
  */
 export function getManagerForEmail(team: Team, email: string): TeamManager | undefined {
-  if (!email) return undefined;
+  if (!email || !team) return undefined;
   const clean = email.trim().toLowerCase();
   const managers = getTeamManagers(team);
   return managers.find((m) => m.email && m.email.trim().toLowerCase() === clean);

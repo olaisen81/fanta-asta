@@ -3,6 +3,7 @@ import { createServerSupabaseClient } from '../../../lib/supabase/server';
 import { isSupabaseConfigured } from '../../../lib/supabase/client';
 
 import { INITIAL_TEAMS } from '../../../lib/fantacalcio/default-players';
+import { teamMatchesEmail } from '../../../lib/fantacalcio/calculator';
 
 export async function GET(request: Request) {
   const { searchParams, origin } = new URL(request.url);
@@ -44,12 +45,12 @@ export async function GET(request: Request) {
           (adminEmail && userEmail === adminEmail);
 
         if (!isMasterAdmin) {
-          // Verifica se l'email corrisponde a una delle squadre registrate
+          // Verifica se l'email corrisponde a una delle squadre registrate (incluso co-allenatori)
           let teamList: any[] = INITIAL_TEAMS;
           try {
             const { data: allTeams } = await supabase
               .from('teams')
-              .select('id, manager_email, is_admin');
+              .select('*');
             if (allTeams && allTeams.length > 0) {
               teamList = allTeams;
             }
@@ -57,9 +58,7 @@ export async function GET(request: Request) {
             console.warn('Errore lettura tabella teams in callback:', e);
           }
 
-          const matchedTeam = teamList.find(
-            (t) => t.manager_email && t.manager_email.trim().toLowerCase() === userEmail
-          );
+          const matchedTeam = teamList.find((t) => teamMatchesEmail(t, userEmail));
 
           const isAuthorized = Boolean(matchedTeam);
 
