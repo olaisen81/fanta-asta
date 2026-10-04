@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import { isTestLoginEnabled, getAppStage } from '../../lib/config/stage';
 import { INITIAL_TEAMS } from '../../lib/fantacalcio/default-players';
+import { teamMatchesEmail, formatManagerNames } from '../../lib/fantacalcio/calculator';
 
 function LoginContent() {
   const router = useRouter();
@@ -98,9 +99,7 @@ function LoginContent() {
 
       if (!isSupabaseConfigured()) {
         // Modalità demo locale
-        const matchedTeam = availableTeams.find(
-          (t) => t.manager_email?.toLowerCase() === cleanInputEmail
-        );
+        const matchedTeam = availableTeams.find((t) => teamMatchesEmail(t, cleanInputEmail));
         const isAdmin = Boolean(
           matchedTeam?.is_admin ||
           cleanInputEmail.includes('admin') ||
@@ -129,9 +128,7 @@ function LoginContent() {
 
       // Controlla se è federato (admin o squadra)
       const userEmail = (data.user.email || email).trim().toLowerCase();
-      const matchedTeam = availableTeams.find(
-        (t) => t.manager_email?.toLowerCase() === userEmail
-      );
+      const matchedTeam = availableTeams.find((t) => teamMatchesEmail(t, userEmail));
       const isAdmin = Boolean(
         matchedTeam?.is_admin ||
         userEmail === 'fabio.perfetti81@gmail.com' ||
@@ -369,7 +366,7 @@ function LoginContent() {
                   <option value="" disabled>Simula accesso come altra squadra...</option>
                   {availableTeams.map((t) => (
                     <option key={t.id} value={t.id}>
-                      {t.name} ({t.manager_name} {t.manager_email ? `- ${t.manager_email}` : ''}) {t.is_admin ? '⭐ Admin' : ''}
+                      {t.name} ({formatManagerNames(t)} {t.manager_email ? `- ${t.manager_email}` : ''}) {t.is_admin ? '⭐ Admin' : ''}
                     </option>
                   ))}
                 </select>

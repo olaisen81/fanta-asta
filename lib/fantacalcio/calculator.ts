@@ -1,4 +1,4 @@
-import { League, Team, RosterPlayer, PlayerRole, TeamBudgetStats } from '../supabase/types';
+import { League, Team, TeamManager, RosterPlayer, PlayerRole, TeamBudgetStats } from '../supabase/types';
 
 export const DEFAULT_LEAGUE_CONFIG: League = {
   id: '00000000-0000-0000-0000-000000000001',
@@ -269,3 +269,116 @@ export function checkPlayerRosterStatus(
     price: matched.price,
   };
 }
+
+/**
+ * Estrae l'elenco dei fanta-allenatori (1 o più) associati a una squadra.
+ * Supporta sia il formato strutturato `team.managers` che il parsing retrocompatibile di `team.manager_name` e `team.manager_email`.
+ */
+export function getTeamManagers(
+  team?: Partial<Team> | { manager_name?: string; manager_email?: string | null; managers?: TeamManager[] } | null
+): TeamManager[] {
+  if (!team) return [];
+
+  if (Array.isArray(team.managers) && team.managers.length > 0) {
+    const valid = team.managers
+      .map((m) => ({ name: (m.name || '').trim(), email: (m.email || '').trim() || null }))
+      .filter((m) => m.name.length > 0);
+    if (valid.length > 0) return valid;
+  }
+
+  const rawName = (team.manager_name || '').trim();
+  const rawEmail = (team.manager_email || '').trim();
+
+  if (!rawName) {
+    if (rawEmail) return [{ name: rawEmail.split('@')[0], email: rawEmail }];
+    return [];
+  }
+
+  // Se contiene separatori come "/", "&", "+", o "," per più allenatori
+  const nameParts = rawName
+    .split(/[/&+]/)
+    .map((s) => s.trim())
+    .filter(Boolean);
+
+  const emailParts = rawEmail
+    ? rawEmail.split(/[,;/+]+/).map((s) => s.trim()).filter(Boolean)
+    : [];
+
+  if (nameParts.length > 1) {
+    return nameParts.map((name, idx) => ({
+      name,
+      email: emailParts[idx] || (idx === 0 && emailParts.length === 1 ? emailParts[0] : null),
+    }));
+  }
+
+  return [
+    {
+      name: rawName,
+      email: rawEmail || null,
+    },
+  ];
+}
+
+/**
+ * Restituisce una stringa formattata con i nomi di tutti i fantallenatori della squadra (es. "Fabio" oppure "Fabio & Bulga").
+ */
+export function formatManagerNames(
+  teamOrManagers?: Partial<Team> | TeamManager[] | { manager_name?: string; managers?: TeamManager[] } | null,
+  separator: string = ' & '
+): string {
+  if (!teamOrManagers) return '';
+  if (Array.isArray(teamOrManagers)) {
+    return teamOrManagers
+      .map((m) => m.name?.trim())
+      .filter(Boolean)
+      .join(separator);
+  }
+  const managers = getTeamManagers(teamOrManagers);
+  if (managers.length > 0) {
+    return managers.map((m) => m.name).filter(Boolean).join(separator);
+  }
+  return (teamOrManagers.manager_name || '').trim();
+}
+
+/**
+ * Restituisce una stringa formattata con le email di tutti i fantallenatori.
+ */
+export function formatManagerEmails(
+  teamOrManagers?: Partial<Team> | TeamManager[] | { manager_email?: string | null; managers?: TeamManager[] } | null,
+  separator: string = ', '
+): string {
+  if (!teamOrManagers) return '';
+  const managers = Array.isArray(teamOrManagers) ? teamOrManagers : getTeamManagers(teamOrManagers);
+  const emails = managers.map((m) => m.email?.trim()).filter(Boolean);
+  if (emails.length > 0) return emails.join(separator);
+  if (!Array.isArray(teamOrManagers) && teamOrManagers.manager_email) {
+    return teamOrManagers.manager_email.trim();
+  }
+  return '';
+}
+
+/**
+ * Verifica se un indirizzo email corrisponde a uno dei fantallenatori della squadra.
+ */
+export function teamMatchesEmail(team: Team, email: string): boolean {
+  if (!email) return false;
+  const clean = email.trim().toLowerCase();
+  if (team.manager_email && team.manager_email.trim().toLowerCase() === clean) return true;
+  if (team.manager_email && team.manager_email.toLowerCase().includes(clean)) {
+    const parts = team.manager_email.toLowerCase().split(/[,;/+\s]+/).map((s) => s.trim());
+    if (parts.includes(clean)) return true;
+  }
+  const managers = getTeamManagers(team);
+  return managers.some((m) => m.email && m.email.trim().toLowerCase() === clean);
+}
+
+/**
+ * Trova il fantallenatore specifico associato all'email data.
+ */
+export function getManagerForEmail(team: Team, email: string): TeamManager | undefined {
+  if (!email) return undefined;
+  const clean = email.trim().toLowerCase();
+  const managers = getTeamManagers(team);
+  return managers.find((m) => m.email && m.email.trim().toLowerCase() === clean);
+}
+

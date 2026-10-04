@@ -5,6 +5,7 @@ import { useSearchParams, useRouter } from 'next/navigation';
 import { useAuction } from '../../context/auction-context';
 import { createClient, isSupabaseConfigured } from '../../lib/supabase/client';
 import { Mail, Lock, CheckCircle2, AlertCircle, ArrowRight, ShieldCheck } from 'lucide-react';
+import { getTeamManagers, formatManagerEmails } from '../../lib/fantacalcio/calculator';
 
 function InviteForm() {
   const searchParams = useSearchParams();
@@ -38,7 +39,7 @@ function InviteForm() {
       setLoading(true);
       setError(null);
 
-      if (isSupabaseConfigured()) {
+      if (isSupabaseConfigured() && team) {
         const supabase = createClient();
         const { data, error: signUpError } = await supabase.auth.signUp({
           email,
@@ -46,17 +47,39 @@ function InviteForm() {
         });
         if (signUpError) throw signUpError;
 
-        // Associa l'utente alla squadra
+        // Associa l'utente e la sua email alla squadra
         if (data.user) {
-          await supabase
-            .from('teams')
-            .update({ user_id: data.user.id, manager_email: email })
-            .eq('id', team.id);
+          const currentManagers = getTeamManagers(team);
+          let updatedManagers = [...currentManagers];
+          const exists = updatedManagers.some(
+            (m) => m.email && m.email.trim().toLowerCase() === email.trim().toLowerCase()
+          );
+          if (!exists) {
+            const emptyEmailIdx = updatedManagers.findIndex((m) => !m.email);
+            if (emptyEmailIdx >= 0) {
+              updatedManagers[emptyEmailIdx] = { ...updatedManagers[emptyEmailIdx], email };
+            } else {
+              updatedManagers.push({ name: email.split('@')[0], email });
+            }
+          }
+          const finalEmails = formatManagerEmails(updatedManagers) || email;
+
+          try {
+            await supabase
+              .from('teams')
+              .update({ user_id: data.user.id, manager_email: finalEmails, managers: updatedManagers })
+              .eq('id', team.id);
+          } catch {
+            await supabase
+              .from('teams')
+              .update({ user_id: data.user.id, manager_email: finalEmails })
+              .eq('id', team.id);
+          }
         }
       }
 
       // Login locale nel contesto
-      loginAsUser(email, 'player', team.id);
+      loginAsUser(email, 'player', team?.id);
       setSuccess(true);
       setTimeout(() => {
         router.push('/rose');

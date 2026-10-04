@@ -826,6 +826,7 @@ export const INITIAL_TEAMS = [
     "name": "Birrareal",
     "manager_name": "Fabio",
     "manager_email": "fabio.perfetti81@gmail.com",
+    "managers": [{ "name": "Fabio", "email": "fabio.perfetti81@gmail.com" }],
     "is_admin": true,
     "initial_budget": 500,
     "order_index": 1
@@ -835,6 +836,7 @@ export const INITIAL_TEAMS = [
     "league_id": "00000000-0000-0000-0000-000000000001",
     "name": "Herta Vernello",
     "manager_name": "Bulga",
+    "managers": [{ "name": "Bulga", "email": null }],
     "initial_budget": 500,
     "order_index": 2
   },
@@ -843,6 +845,7 @@ export const INITIAL_TEAMS = [
     "league_id": "00000000-0000-0000-0000-000000000001",
     "name": "Via Canale facci sognare",
     "manager_name": "Cocco",
+    "managers": [{ "name": "Cocco", "email": null }],
     "initial_budget": 500,
     "order_index": 3
   },
@@ -851,6 +854,7 @@ export const INITIAL_TEAMS = [
     "league_id": "00000000-0000-0000-0000-000000000001",
     "name": "Vamosss Ultimi Pezzi",
     "manager_name": "Marco",
+    "managers": [{ "name": "Marco", "email": null }],
     "initial_budget": 500,
     "order_index": 4
   },
@@ -859,6 +863,7 @@ export const INITIAL_TEAMS = [
     "league_id": "00000000-0000-0000-0000-000000000001",
     "name": "AC Panzerottina",
     "manager_name": "Loppo",
+    "managers": [{ "name": "Loppo", "email": null }],
     "initial_budget": 500,
     "order_index": 5
   },
@@ -867,6 +872,7 @@ export const INITIAL_TEAMS = [
     "league_id": "00000000-0000-0000-0000-000000000001",
     "name": "Op Op Op Via",
     "manager_name": "Teo",
+    "managers": [{ "name": "Teo", "email": null }],
     "initial_budget": 500,
     "order_index": 6
   },
@@ -875,6 +881,7 @@ export const INITIAL_TEAMS = [
     "league_id": "00000000-0000-0000-0000-000000000001",
     "name": "Atletico Maria",
     "manager_name": "Beppe",
+    "managers": [{ "name": "Beppe", "email": null }],
     "initial_budget": 500,
     "order_index": 7
   },
@@ -883,6 +890,7 @@ export const INITIAL_TEAMS = [
     "league_id": "00000000-0000-0000-0000-000000000001",
     "name": "Quartieri Spagnoli",
     "manager_name": "Tonio",
+    "managers": [{ "name": "Tonio", "email": null }],
     "initial_budget": 500,
     "order_index": 8
   },
@@ -892,6 +900,7 @@ export const INITIAL_TEAMS = [
     "name": "Matto Scacco",
     "manager_name": "Ale",
     "manager_email": "aleperfetti81@gmail.com",
+    "managers": [{ "name": "Ale", "email": "aleperfetti81@gmail.com" }],
     "is_admin": true,
     "initial_budget": 500,
     "order_index": 9
@@ -901,6 +910,7 @@ export const INITIAL_TEAMS = [
     "league_id": "00000000-0000-0000-0000-000000000001",
     "name": "Piangina Number One",
     "manager_name": "Viro",
+    "managers": [{ "name": "Viro", "email": null }],
     "initial_budget": 500,
     "order_index": 10
   }

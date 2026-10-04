@@ -23,6 +23,11 @@ export interface League {
   created_at?: string;
 }
 
+export interface TeamManager {
+  name: string;
+  email?: string | null;
+}
+
 export interface Team {
   id: string;
   league_id: string;
@@ -30,6 +35,7 @@ export interface Team {
   name: string;
   manager_name: string;
   manager_email?: string | null;
+  managers?: TeamManager[];
   user_id?: string | null;
   is_admin?: boolean;
   initial_budget: number;

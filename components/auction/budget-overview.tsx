@@ -3,7 +3,7 @@
 import React from 'react';
 import { Users, Eye, Coins, AlertCircle } from 'lucide-react';
 import { TeamBudgetStats, PlayerRole } from '../../lib/supabase/types';
-import { getRoleBadgeStyles } from '../../lib/fantacalcio/calculator';
+import { getRoleBadgeStyles, formatManagerNames } from '../../lib/fantacalcio/calculator';
 import { useAuction } from '../../context/auction-context';
 
 interface BudgetOverviewProps {
@@ -58,7 +58,7 @@ export function BudgetOverview({ onSelectTeam, onPreSelectTeam }: BudgetOverview
                     )}
                   </div>
                   <div className="text-[11px] text-slate-400 truncate">
-                    {stat.team.manager_name}
+                    {formatManagerNames(stat.team)}
                   </div>
                 </div>
 

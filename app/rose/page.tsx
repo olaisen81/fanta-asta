@@ -4,7 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuction } from '../../context/auction-context';
 import { PlayerRole, RosterPlayer } from '../../lib/supabase/types';
-import { getRoleBadgeStyles, formatCredits } from '../../lib/fantacalcio/calculator';
+import { getRoleBadgeStyles, formatCredits, formatManagerNames } from '../../lib/fantacalcio/calculator';
 import { Users, Download, Search, Shield, Filter, Plus, Edit3, Trash2 } from 'lucide-react';
 import { EditRosterPlayerModal } from '../../components/auction/edit-roster-player-modal';
 import { AddRosterPlayerModal } from '../../components/auction/add-roster-player-modal';
@@ -41,7 +41,7 @@ export default function RosePage() {
       if (selectedSeasonId && item.season_id && item.season_id !== selectedSeasonId) continue;
       const team = teams.find((t) => t.id === item.team_id);
       const teamName = team?.name || 'Sconosciuta';
-      const manager = team?.manager_name || '';
+      const manager = formatManagerNames(team) || team?.manager_name || '';
       csvContent += `"${teamName}","${manager}","${item.role}","${item.player_name}","${item.serie_a_team}",${item.price}\n`;
     }
 
@@ -196,7 +196,7 @@ export default function RosePage() {
                       )}
                     </h2>
                     <div className="text-xs text-slate-400 mt-0.5">
-                      Fantallenatore: <span className="text-slate-200 font-medium">{team.manager_name}</span>
+                      Fantallenatori: <span className="text-slate-200 font-medium">{formatManagerNames(team)}</span>
                     </div>
                   </div>
 

@@ -19,7 +19,7 @@ import {
   Shield,
 } from 'lucide-react';
 import { useAuction } from '../../context/auction-context';
-import { getRoleBadgeStyles, formatCredits } from '../../lib/fantacalcio/calculator';
+import { getRoleBadgeStyles, formatCredits, formatManagerNames } from '../../lib/fantacalcio/calculator';
 import { PlayerRole, RosterPlayer } from '../../lib/supabase/types';
 import { StoricoSkeleton } from '../../components/auction/skeletons';
 
@@ -411,7 +411,7 @@ export default function StoricoPage() {
                 <option value="ALL">Tutte le squadre ({seasonTeams.length})</option>
                 {seasonTeams.map((t) => (
                   <option key={t.id} value={t.id}>
-                    {t.name} ({t.manager_name})
+                    {t.name} ({formatManagerNames(t)})
                   </option>
                 ))}
               </select>
@@ -484,7 +484,7 @@ export default function StoricoPage() {
                       <div className="flex items-center justify-between border-b border-slate-800/80 pb-3">
                         <div>
                           <h3 className="font-extrabold text-base text-white">{team.name}</h3>
-                          <p className="text-xs text-slate-400">{team.manager_name}</p>
+                          <p className="text-xs text-slate-400">{formatManagerNames(team)}</p>
                         </div>
                         <div className="text-right">
                           <div className="text-xs text-slate-400">Spesa rosa:</div>

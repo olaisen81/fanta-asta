@@ -33,6 +33,7 @@ CREATE TABLE IF NOT EXISTS public.teams (
     name TEXT NOT NULL,
     manager_name TEXT NOT NULL,
     manager_email TEXT,
+    managers JSONB DEFAULT '[]'::jsonb,
     user_id UUID,
     is_admin BOOLEAN NOT NULL DEFAULT false,
     initial_budget INTEGER NOT NULL DEFAULT 500,
@@ -40,6 +41,9 @@ CREATE TABLE IF NOT EXISTS public.teams (
     order_index INTEGER DEFAULT 0,
     created_at TIMESTAMPTZ DEFAULT timezone('utc'::text, now()) NOT NULL
 );
+
+-- Migrazione idempotente per database esistenti
+ALTER TABLE public.teams ADD COLUMN IF NOT EXISTS managers JSONB DEFAULT '[]'::jsonb;
 
 -- 4. TABELLA CALCIATORI SERIE A (PLAYERS LISTONE)
 CREATE TABLE IF NOT EXISTS public.players (

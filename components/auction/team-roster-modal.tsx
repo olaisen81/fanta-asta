@@ -3,7 +3,7 @@
 import React, { useState } from 'react';
 import { X, Shield, Users, Coins, UserMinus, Plus, Edit3, Trash2 } from 'lucide-react';
 import { Team, RosterPlayer, PlayerRole } from '../../lib/supabase/types';
-import { getRoleBadgeStyles, formatCredits } from '../../lib/fantacalcio/calculator';
+import { getRoleBadgeStyles, formatCredits, formatManagerNames } from '../../lib/fantacalcio/calculator';
 import { useAuction } from '../../context/auction-context';
 import { SvincoloModal } from './repair-modal';
 import { EditRosterPlayerModal } from './edit-roster-player-modal';
@@ -40,10 +40,10 @@ export function TeamRosterModal({ teamId, onClose }: TeamRosterModalProps) {
           {/* Header */}
           <div className="flex items-center justify-between border-b border-slate-800 p-4 sm:p-5 bg-slate-900/80">
             <div>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 flex-wrap">
                 <h2 className="text-lg sm:text-xl font-black text-white">{team.name}</h2>
                 <span className="text-xs px-2 py-0.5 rounded-full bg-slate-800 text-slate-300 font-medium">
-                  {team.manager_name}
+                  {formatManagerNames(team)}
                 </span>
               </div>
               <div className="mt-1 flex flex-wrap items-center gap-2 sm:gap-3 text-xs text-slate-400">

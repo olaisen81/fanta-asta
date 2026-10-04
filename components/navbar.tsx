@@ -23,6 +23,7 @@ import {
   Eye,
 } from 'lucide-react';
 import { useAuction } from '../context/auction-context';
+import { formatManagerNames } from '../lib/fantacalcio/calculator';
 import logo from '../public/logo.png';
 
 export function Navbar() {
@@ -372,7 +373,7 @@ export function Navbar() {
                                   <div className="truncate">
                                     <div className="truncate font-medium">{team.name}</div>
                                     <div className="text-[10px] text-slate-400 truncate">
-                                      {team.manager_name} {team.manager_email ? `(${team.manager_email})` : ''}
+                                      {formatManagerNames(team)} {team.manager_email ? `(${team.manager_email})` : ''}
                                     </div>
                                   </div>
                                   {isSelected && <div className="h-2 w-2 rounded-full bg-sky-400 shrink-0" />}

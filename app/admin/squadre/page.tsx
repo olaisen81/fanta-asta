@@ -3,7 +3,14 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuction } from '../../../context/auction-context';
-import { TOTAL_SLOTS, getRoleBadgeStyles } from '../../../lib/fantacalcio/calculator';
+import {
+  TOTAL_SLOTS,
+  getRoleBadgeStyles,
+  getTeamManagers,
+  formatManagerNames,
+  formatManagerEmails,
+} from '../../../lib/fantacalcio/calculator';
+import { Team, TeamManager } from '../../../lib/supabase/types';
 import {
   Settings,
   Mail,
@@ -20,7 +27,9 @@ import {
   Plus,
   PlusCircle,
   Users,
+  User,
   Calendar,
+  X,
 } from 'lucide-react';
 import { AdminSquadreSkeleton } from '../../../components/auction/skeletons';
 
@@ -55,7 +64,15 @@ export default function AdminSquadrePage() {
   }, [isLoadingData, isLoggedIn, currentUser.isAdmin, router]);
 
   const [editingTeamId, setEditingTeamId] = useState<string | null>(null);
-  const [formData, setFormData] = useState({ name: '', manager_name: '', manager_email: '', is_admin: false });
+  const [formData, setFormData] = useState<{
+    name: string;
+    managers: { name: string; email: string }[];
+    is_admin: boolean;
+  }>({
+    name: '',
+    managers: [{ name: '', email: '' }],
+    is_admin: false,
+  });
   const [copiedToken, setCopiedToken] = useState<string | null>(null);
   const [showResetConfirm, setShowResetConfirm] = useState(false);
   const [resetSuccess, setResetSuccess] = useState(false);
@@ -83,14 +100,22 @@ export default function AdminSquadrePage() {
   }, [currentSeasonObj]);
 
   // Stato per eliminazione squadra
-  const [teamToDelete, setTeamToDelete] = useState<any | null>(null);
+  const [teamToDelete, setTeamToDelete] = useState<Team | null>(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deleteSuccessMessage, setDeleteSuccessMessage] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
 
-  // Stato per aggiunta nuova squadra
+  // Stato per aggiunta nuova squadra (supporta 1 o più fantallenatori)
   const [showAddModal, setShowAddModal] = useState(false);
-  const [newTeamData, setNewTeamData] = useState({ name: '', manager_name: '', manager_email: '', is_admin: false });
+  const [newTeamData, setNewTeamData] = useState<{
+    name: string;
+    managers: { name: string; email: string }[];
+    is_admin: boolean;
+  }>({
+    name: '',
+    managers: [{ name: '', email: '' }],
+    is_admin: false,
+  });
   const [isCreatingTeam, setIsCreatingTeam] = useState(false);
   const [addTeamSuccess, setAddTeamSuccess] = useState<string | null>(null);
 
@@ -139,33 +164,44 @@ export default function AdminSquadrePage() {
     }
   };
 
-  const handleStartEdit = (team: any) => {
+  const handleStartEdit = (team: Team) => {
     setEditingTeamId(team.id);
+    const mgrs = getTeamManagers(team);
     setFormData({
       name: team.name,
-      manager_name: team.manager_name,
-      manager_email: team.manager_email || '',
+      managers:
+        mgrs.length > 0
+          ? mgrs.map((m) => ({ name: m.name, email: m.email || '' }))
+          : [{ name: team.manager_name || '', email: team.manager_email || '' }],
       is_admin: Boolean(team.is_admin),
     });
   };
 
   const handleSaveTeam = async (teamId: string) => {
+    const validManagers = formData.managers
+      .map((m) => ({ name: m.name.trim(), email: m.email.trim() || null }))
+      .filter((m) => m.name.length > 0);
+
+    const fallbackName = validManagers.length > 0 ? formatManagerNames(validManagers, ' / ') : 'Fantallenatore';
+    const fallbackEmail = validManagers.length > 0 ? formatManagerEmails(validManagers) : null;
+
     await updateTeam(teamId, {
       name: formData.name.trim(),
-      manager_name: formData.manager_name.trim(),
-      manager_email: formData.manager_email.trim() || null,
+      manager_name: fallbackName,
+      manager_email: fallbackEmail,
+      managers: validManagers.length > 0 ? validManagers : [{ name: fallbackName, email: fallbackEmail }],
       is_admin: formData.is_admin,
     });
     setEditingTeamId(null);
   };
 
-  const handleGenerateInvite = (team: any) => {
+  const handleGenerateInvite = (team: Team, specificEmail?: string) => {
     const origin = typeof window !== 'undefined' ? window.location.origin : '';
-    const inviteLink = `${origin}/invite?teamId=${team.id}&email=${encodeURIComponent(
-      team.manager_email || 'partecipante@fantaasta.it'
-    )}`;
+    const emailToUse = specificEmail || team.manager_email || `${team.id}@fantaasta.it`;
+    const inviteLink = `${origin}/invite?teamId=${team.id}&email=${encodeURIComponent(emailToUse)}`;
     navigator.clipboard.writeText(inviteLink);
-    setCopiedToken(team.id);
+    const tokenKey = specificEmail ? `${team.id}_${specificEmail}` : team.id;
+    setCopiedToken(tokenKey);
     setTimeout(() => setCopiedToken(null), 3000);
   };
 
@@ -176,7 +212,7 @@ export default function AdminSquadrePage() {
     setTimeout(() => setResetSuccess(false), 4000);
   };
 
-  const handleStartDelete = (team: any) => {
+  const handleStartDelete = (team: Team) => {
     setTeamToDelete(team);
     setShowDeleteConfirm(true);
   };
@@ -198,19 +234,27 @@ export default function AdminSquadrePage() {
 
   const handleCreateTeamSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newTeamData.name.trim() || !newTeamData.manager_name.trim()) return;
+    const validManagers = newTeamData.managers
+      .map((m) => ({ name: m.name.trim(), email: m.email.trim() || null }))
+      .filter((m) => m.name.length > 0);
+
+    if (!newTeamData.name.trim() || validManagers.length === 0) return;
 
     try {
       setIsCreatingTeam(true);
+      const primaryName = formatManagerNames(validManagers, ' / ');
+      const primaryEmail = formatManagerEmails(validManagers) || undefined;
+
       const created = await createTeam(
         newTeamData.name.trim(),
-        newTeamData.manager_name.trim(),
-        newTeamData.manager_email.trim() || undefined,
+        primaryName,
+        primaryEmail,
         undefined,
-        newTeamData.is_admin
+        newTeamData.is_admin,
+        validManagers
       );
       setShowAddModal(false);
-      setNewTeamData({ name: '', manager_name: '', manager_email: '', is_admin: false });
+      setNewTeamData({ name: '', managers: [{ name: '', email: '' }], is_admin: false });
       setAddTeamSuccess(`Squadra "${created.name}" aggiunta alla lega con successo.`);
       setTimeout(() => setAddTeamSuccess(null), 4000);
     } finally {
@@ -600,53 +644,100 @@ export default function AdminSquadrePage() {
               >
                 {isEditing ? (
                   /* Form di Modifica */
-                  <div className="space-y-3">
+                  <div className="space-y-4">
                     <div className="flex items-center justify-between border-b border-slate-800 pb-2">
                       <span className="text-xs font-bold text-indigo-400">
                         Modifica Squadra #{idx + 1}
                       </span>
                     </div>
 
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                      <div>
-                        <label className="block text-[11px] font-semibold text-slate-400 mb-1">
-                          Nome Squadra
+                    <div>
+                      <label className="block text-[11px] font-semibold text-slate-400 mb-1">
+                        Nome Squadra
+                      </label>
+                      <input
+                        type="text"
+                        value={formData.name}
+                        onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                        className="w-full px-3 py-1.5 text-xs rounded-xl border border-slate-700 bg-slate-900 text-white focus:outline-none focus:border-indigo-500"
+                      />
+                    </div>
+
+                    {/* Elenco Fanta-allenatori della squadra */}
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <label className="text-[11px] font-semibold text-slate-400 flex items-center gap-1.5">
+                          <Users className="h-3.5 w-3.5 text-indigo-400" />
+                          <span>Fanta-Allenatori ({formData.managers.length})</span>
                         </label>
-                        <input
-                          type="text"
-                          value={formData.name}
-                          onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                          className="w-full px-3 py-1.5 text-xs rounded-xl border border-slate-700 bg-slate-900 text-white focus:outline-none focus:border-indigo-500"
-                        />
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setFormData({
+                              ...formData,
+                              managers: [...formData.managers, { name: '', email: '' }],
+                            })
+                          }
+                          className="flex items-center gap-1 text-[11px] font-bold text-indigo-400 hover:text-indigo-300 py-0.5 px-2 rounded-lg bg-indigo-500/10 border border-indigo-500/20 hover:bg-indigo-500/20 transition-colors"
+                        >
+                          <Plus className="h-3 w-3" />
+                          <span>Aggiungi Co-Allenatore</span>
+                        </button>
                       </div>
 
-                      <div>
-                        <label className="block text-[11px] font-semibold text-slate-400 mb-1">
-                          Nome Fantallenatore
-                        </label>
-                        <input
-                          type="text"
-                          value={formData.manager_name}
-                          onChange={(e) =>
-                            setFormData({ ...formData, manager_name: e.target.value })
-                          }
-                          className="w-full px-3 py-1.5 text-xs rounded-xl border border-slate-700 bg-slate-900 text-white focus:outline-none focus:border-indigo-500"
-                        />
-                      </div>
+                      <div className="space-y-2">
+                        {formData.managers.map((mgr, mIdx) => (
+                          <div
+                            key={mIdx}
+                            className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 p-2.5 rounded-xl bg-slate-950/60 border border-slate-800"
+                          >
+                            <div className="flex items-center gap-2 flex-1">
+                              <span className="h-6 w-6 shrink-0 rounded-lg bg-slate-800 text-slate-400 font-bold text-[10px] flex items-center justify-center">
+                                #{mIdx + 1}
+                              </span>
+                              <input
+                                type="text"
+                                required
+                                placeholder="Nome Fantallenatore (es. Marco)"
+                                value={mgr.name}
+                                onChange={(e) => {
+                                  const updated = [...formData.managers];
+                                  updated[mIdx] = { ...updated[mIdx], name: e.target.value };
+                                  setFormData({ ...formData, managers: updated });
+                                }}
+                                className="flex-1 px-2.5 py-1.5 text-xs rounded-lg border border-slate-700 bg-slate-900 text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500"
+                              />
+                            </div>
 
-                      <div>
-                        <label className="block text-[11px] font-semibold text-slate-400 mb-1">
-                          Email Partecipante (per invito)
-                        </label>
-                        <input
-                          type="email"
-                          value={formData.manager_email}
-                          placeholder="es. amico@gmail.com"
-                          onChange={(e) =>
-                            setFormData({ ...formData, manager_email: e.target.value })
-                          }
-                          className="w-full px-3 py-1.5 text-xs rounded-xl border border-slate-700 bg-slate-900 text-white focus:outline-none focus:border-indigo-500"
-                        />
+                            <div className="flex items-center gap-2 flex-1">
+                              <input
+                                type="email"
+                                placeholder="Email per invito (opzionale)"
+                                value={mgr.email}
+                                onChange={(e) => {
+                                  const updated = [...formData.managers];
+                                  updated[mIdx] = { ...updated[mIdx], email: e.target.value };
+                                  setFormData({ ...formData, managers: updated });
+                                }}
+                                className="flex-1 px-2.5 py-1.5 text-xs rounded-lg border border-slate-700 bg-slate-900 text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500"
+                              />
+
+                              {formData.managers.length > 1 && (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    const updated = formData.managers.filter((_, i) => i !== mIdx);
+                                    setFormData({ ...formData, managers: updated });
+                                  }}
+                                  className="p-1.5 rounded-lg text-rose-400 hover:text-rose-300 hover:bg-rose-500/15 transition-colors"
+                                  title="Rimuovi questo co-allenatore"
+                                >
+                                  <Trash2 className="h-3.5 w-3.5" />
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                        ))}
                       </div>
                     </div>
 
@@ -687,8 +778,8 @@ export default function AdminSquadrePage() {
                 ) : (
                   /* Visualizzazione Normale Squadra */
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                    <div className="flex items-center gap-3">
-                      <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-slate-800 border border-slate-700 font-bold text-xs text-slate-300">
+                    <div className="flex items-start sm:items-center gap-3">
+                      <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-slate-800 border border-slate-700 font-bold text-xs text-slate-300 shrink-0">
                         {idx + 1}
                       </span>
 
@@ -705,37 +796,98 @@ export default function AdminSquadrePage() {
                             {teamRosterCount} calciatori ({teamSpent} FM spesi)
                           </span>
                         </div>
-                        <div className="text-xs text-slate-400 flex items-center gap-2 mt-0.5">
-                          <span className="text-slate-300">{team.manager_name}</span>
-                          {team.manager_email && (
-                            <>
-                              <span>·</span>
-                              <span className="text-indigo-400">{team.manager_email}</span>
-                            </>
-                          )}
-                        </div>
+
+                        {/* Allenatori visualizzati come lista / chips */}
+                        {(() => {
+                          const managers = getTeamManagers(team);
+                          if (managers.length <= 1) {
+                            const single = managers[0] || { name: team.manager_name, email: team.manager_email };
+                            return (
+                              <div className="text-xs text-slate-400 flex items-center gap-1.5 mt-0.5 flex-wrap">
+                                <span className="text-slate-300 font-medium">{single.name}</span>
+                                {single.email && (
+                                  <>
+                                    <span>·</span>
+                                    <span className="text-indigo-400">{single.email}</span>
+                                  </>
+                                )}
+                              </div>
+                            );
+                          }
+                          return (
+                            <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
+                              <span className="text-[11px] text-slate-400 font-medium mr-0.5">Allenatori:</span>
+                              {managers.map((m, mIdx) => (
+                                <span
+                                  key={mIdx}
+                                  className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-slate-900 border border-slate-800 text-[11px] text-slate-300"
+                                >
+                                  <User className="h-3 w-3 text-indigo-400" />
+                                  <span className="font-semibold text-slate-200">{m.name}</span>
+                                  {m.email && <span className="text-indigo-400/80 text-[10px]">({m.email})</span>}
+                                </span>
+                              ))}
+                            </div>
+                          );
+                        })()}
                       </div>
                     </div>
 
-                    <div className="flex items-center gap-2 self-end sm:self-auto">
-                      {/* Tasto Genera / Copia Invito */}
-                      <button
-                        onClick={() => handleGenerateInvite(team)}
-                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-indigo-600/20 text-indigo-300 border border-indigo-500/30 hover:bg-indigo-600/30 transition-colors"
-                        title="Copia link per invitare questo giocatore a impostare la password"
-                      >
-                        {copiedToken === team.id ? (
-                          <>
-                            <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400" />
-                            <span className="text-emerald-400">Link Copiato!</span>
-                          </>
-                        ) : (
-                          <>
-                            <Copy className="h-3.5 w-3.5" />
-                            <span>Copia Invito</span>
-                          </>
-                        )}
-                      </button>
+                    <div className="flex items-center gap-2 self-end sm:self-auto flex-wrap">
+                      {/* Tasti Invito: Singolo o per Ciascun Allenatore */}
+                      {(() => {
+                        const managers = getTeamManagers(team);
+                        if (managers.length <= 1) {
+                          const isCopied = copiedToken === team.id;
+                          return (
+                            <button
+                              onClick={() => handleGenerateInvite(team)}
+                              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-indigo-600/20 text-indigo-300 border border-indigo-500/30 hover:bg-indigo-600/30 transition-colors"
+                              title="Copia link per invitare questo giocatore a impostare la password"
+                            >
+                              {isCopied ? (
+                                <>
+                                  <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400" />
+                                  <span className="text-emerald-400">Link Copiato!</span>
+                                </>
+                              ) : (
+                                <>
+                                  <Copy className="h-3.5 w-3.5" />
+                                  <span>Copia Invito</span>
+                                </>
+                              )}
+                            </button>
+                          );
+                        }
+                        return (
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            {managers.map((m, mIdx) => {
+                              const tokenKey = `${team.id}_${m.email || m.name}`;
+                              const isCopied = copiedToken === tokenKey;
+                              return (
+                                <button
+                                  key={mIdx}
+                                  onClick={() => handleGenerateInvite(team, m.email || undefined)}
+                                  className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-xs font-semibold bg-indigo-600/20 text-indigo-300 border border-indigo-500/30 hover:bg-indigo-600/30 transition-colors"
+                                  title={`Copia invito per ${m.name}${m.email ? ` (${m.email})` : ''}`}
+                                >
+                                  {isCopied ? (
+                                    <>
+                                      <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400" />
+                                      <span className="text-emerald-400">Copiato ({m.name})</span>
+                                    </>
+                                  ) : (
+                                    <>
+                                      <Copy className="h-3 w-3" />
+                                      <span>Invito {m.name}</span>
+                                    </>
+                                  )}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        );
+                      })()}
 
                       {/* Tasto Modifica */}
                       <button
@@ -835,18 +987,18 @@ export default function AdminSquadrePage() {
       {/* Modale Aggiungi Squadra */}
       {showAddModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in-50">
-          <div className="w-full max-w-md rounded-2xl border border-indigo-500/40 bg-[#0f172a] p-5 shadow-2xl space-y-4">
+          <div className="w-full max-w-lg rounded-2xl border border-indigo-500/40 bg-[#0f172a] p-5 shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto">
             <div className="flex items-center gap-3 text-indigo-400">
               <div className="p-2.5 rounded-xl bg-indigo-500/20 border border-indigo-500/30">
                 <PlusCircle className="h-6 w-6" />
               </div>
               <div>
                 <h3 className="font-extrabold text-base text-white">Aggiungi Nuova Squadra</h3>
-                <p className="text-xs text-slate-400">Inserisci i dati della squadra e del fantallenatore</p>
+                <p className="text-xs text-slate-400">Inserisci i dati della squadra e dei fantallenatori (uno o più)</p>
               </div>
             </div>
 
-            <form onSubmit={handleCreateTeamSubmit} className="space-y-3 pt-1">
+            <form onSubmit={handleCreateTeamSubmit} className="space-y-3.5 pt-1">
               <div>
                 <label className="block text-[11px] font-semibold text-slate-300 mb-1">
                   Nome Squadra *
@@ -861,31 +1013,82 @@ export default function AdminSquadrePage() {
                 />
               </div>
 
-              <div>
-                <label className="block text-[11px] font-semibold text-slate-300 mb-1">
-                  Nome Fantallenatore *
-                </label>
-                <input
-                  type="text"
-                  required
-                  placeholder="es. Marco, Giuseppe, Fabio..."
-                  value={newTeamData.manager_name}
-                  onChange={(e) => setNewTeamData({ ...newTeamData, manager_name: e.target.value })}
-                  className="w-full px-3 py-2 text-xs rounded-xl border border-slate-700 bg-slate-900 text-white focus:outline-none focus:border-indigo-500"
-                />
-              </div>
+              {/* Elenco Fanta-allenatori */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <label className="text-[11px] font-semibold text-slate-300 flex items-center gap-1.5">
+                    <Users className="h-3.5 w-3.5 text-indigo-400" />
+                    <span>Fanta-Allenatori * ({newTeamData.managers.length})</span>
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setNewTeamData({
+                        ...newTeamData,
+                        managers: [...newTeamData.managers, { name: '', email: '' }],
+                      })
+                    }
+                    className="flex items-center gap-1 text-[11px] font-bold text-indigo-400 hover:text-indigo-300 py-0.5 px-2 rounded-lg bg-indigo-500/10 border border-indigo-500/20 hover:bg-indigo-500/20 transition-colors"
+                  >
+                    <Plus className="h-3 w-3" />
+                    <span>Aggiungi Co-Allenatore</span>
+                  </button>
+                </div>
 
-              <div>
-                <label className="block text-[11px] font-semibold text-slate-300 mb-1">
-                  Email Partecipante (opzionale per invito)
-                </label>
-                <input
-                  type="email"
-                  placeholder="es. amico@gmail.com"
-                  value={newTeamData.manager_email}
-                  onChange={(e) => setNewTeamData({ ...newTeamData, manager_email: e.target.value })}
-                  className="w-full px-3 py-2 text-xs rounded-xl border border-slate-700 bg-slate-900 text-white focus:outline-none focus:border-indigo-500"
-                />
+                <div className="space-y-2">
+                  {newTeamData.managers.map((mgr, mIdx) => (
+                    <div
+                      key={mIdx}
+                      className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 p-2.5 rounded-xl bg-slate-950/60 border border-slate-800"
+                    >
+                      <div className="flex items-center gap-2 flex-1">
+                        <span className="h-6 w-6 shrink-0 rounded-lg bg-slate-800 text-slate-400 font-bold text-[10px] flex items-center justify-center">
+                          #{mIdx + 1}
+                        </span>
+                        <input
+                          type="text"
+                          required
+                          placeholder="Nome Fantallenatore *"
+                          value={mgr.name}
+                          onChange={(e) => {
+                            const updated = [...newTeamData.managers];
+                            updated[mIdx] = { ...updated[mIdx], name: e.target.value };
+                            setNewTeamData({ ...newTeamData, managers: updated });
+                          }}
+                          className="flex-1 px-2.5 py-1.5 text-xs rounded-lg border border-slate-700 bg-slate-900 text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500"
+                        />
+                      </div>
+
+                      <div className="flex items-center gap-2 flex-1">
+                        <input
+                          type="email"
+                          placeholder="Email per invito (opzionale)"
+                          value={mgr.email}
+                          onChange={(e) => {
+                            const updated = [...newTeamData.managers];
+                            updated[mIdx] = { ...updated[mIdx], email: e.target.value };
+                            setNewTeamData({ ...newTeamData, managers: updated });
+                          }}
+                          className="flex-1 px-2.5 py-1.5 text-xs rounded-lg border border-slate-700 bg-slate-900 text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500"
+                        />
+
+                        {newTeamData.managers.length > 1 && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const updated = newTeamData.managers.filter((_, i) => i !== mIdx);
+                              setNewTeamData({ ...newTeamData, managers: updated });
+                            }}
+                            className="p-1.5 rounded-lg text-rose-400 hover:text-rose-300 hover:bg-rose-500/15 transition-colors"
+                            title="Rimuovi questo co-allenatore"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
               </div>
 
               <div className="pt-1">
@@ -911,7 +1114,7 @@ export default function AdminSquadrePage() {
                   type="button"
                   onClick={() => {
                     setShowAddModal(false);
-                    setNewTeamData({ name: '', manager_name: '', manager_email: '', is_admin: false });
+                    setNewTeamData({ name: '', managers: [{ name: '', email: '' }], is_admin: false });
                   }}
                   className="px-4 py-2 text-xs font-semibold rounded-xl bg-slate-800 text-slate-300 hover:bg-slate-700"
                 >
@@ -919,7 +1122,11 @@ export default function AdminSquadrePage() {
                 </button>
                 <button
                   type="submit"
-                  disabled={isCreatingTeam || !newTeamData.name.trim() || !newTeamData.manager_name.trim()}
+                  disabled={
+                    isCreatingTeam ||
+                    !newTeamData.name.trim() ||
+                    !newTeamData.managers.some((m) => m.name.trim().length > 0)
+                  }
                   className="px-4 py-2 text-xs font-bold rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white shadow-lg shadow-emerald-600/30 flex items-center gap-1.5 transition-colors disabled:opacity-50"
                 >
                   <Check className="h-3.5 w-3.5" />

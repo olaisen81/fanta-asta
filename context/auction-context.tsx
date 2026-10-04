@@ -5,6 +5,7 @@ import confetti from 'canvas-confetti';
 import {
   League,
   Team,
+  TeamManager,
   Player,
   RosterPlayer,
   AuctionState,
@@ -18,6 +19,11 @@ import {
   DEFAULT_LEAGUE_CONFIG,
   calculateTeamStats,
   validatePurchase,
+  getTeamManagers,
+  formatManagerNames,
+  formatManagerEmails,
+  teamMatchesEmail,
+  getManagerForEmail,
 } from '../lib/fantacalcio/calculator';
 import { INITIAL_SERIE_A_PLAYERS, INITIAL_TEAMS } from '../lib/fantacalcio/default-players';
 import { findSerieAClub } from '../lib/fantacalcio/history-importer';
@@ -44,10 +50,8 @@ export function resolveUserSession(
 
   const cleanEmail = userEmail.trim().toLowerCase();
 
-  // Match con manager_email registrata sulle squadre (case-insensitive)
-  const matchedTeam = teams.find(
-    (t) => t.manager_email && t.manager_email.trim().toLowerCase() === cleanEmail
-  );
+  // Match con manager_email registrata sulle squadre o lista co-allenatori (case-insensitive)
+  const matchedTeam = teams.find((t) => teamMatchesEmail(t, cleanEmail));
 
   const adminEnv = (process.env.NEXT_PUBLIC_ADMIN_EMAIL || '').trim().toLowerCase();
   const leagueAdmin = (league?.admin_email || '').trim().toLowerCase();
@@ -62,7 +66,7 @@ export function resolveUserSession(
     (leagueAdmin && cleanEmail === leagueAdmin) ||
     metadata?.role === 'admin' ||
     metadata?.is_admin === true ||
-    (matchedTeam && matchedTeam.manager_name?.toLowerCase().includes('admin')) ||
+    (matchedTeam && formatManagerNames(matchedTeam).toLowerCase().includes('admin')) ||
     cleanEmail.startsWith('admin')
   );
 
@@ -71,11 +75,12 @@ export function resolveUserSession(
 
   if (matchedTeam) {
     teamId = matchedTeam.id;
-    managerName = matchedTeam.manager_name;
+    const matchedManager = getManagerForEmail(matchedTeam, cleanEmail);
+    managerName = matchedManager?.name || formatManagerNames(matchedTeam) || matchedTeam.manager_name;
   } else if (isAdmin) {
-    const adminTeam = teams.find((t) => t.is_admin || t.manager_name?.toLowerCase().includes('admin')) || teams[0];
+    const adminTeam = teams.find((t) => t.is_admin || formatManagerNames(t).toLowerCase().includes('admin')) || teams[0];
     teamId = adminTeam?.id || null;
-    managerName = metadata?.full_name || metadata?.name || adminTeam?.manager_name || 'Banditore (Admin)';
+    managerName = metadata?.full_name || metadata?.name || (adminTeam ? formatManagerNames(adminTeam) : 'Banditore (Admin)');
   } else {
     // Nessuna squadra collegata e non admin: utente Google non federato!
     return {
@@ -153,7 +158,14 @@ interface AuctionContextType {
   addManualPlayer: (name: string, role: PlayerRole, team: string, initialPrice?: number) => Promise<Player>;
   importPlayers: (newPlayers: Omit<Player, 'id' | 'created_at'>[]) => Promise<number>;
   updateTeam: (teamId: string, updates: Partial<Team>) => Promise<void>;
-  createTeam: (name: string, manager_name: string, manager_email?: string, seasonId?: string, is_admin?: boolean) => Promise<Team>;
+  createTeam: (
+    name: string,
+    manager_name: string,
+    manager_email?: string,
+    seasonId?: string,
+    is_admin?: boolean,
+    managers?: TeamManager[]
+  ) => Promise<Team>;
   deleteTeam: (teamId: string) => Promise<boolean>;
   updateLeagueSettings: (settings: Partial<League>) => Promise<void>;
   resetAuction: () => Promise<void>;
@@ -1396,14 +1408,37 @@ export function AuctionProvider({ children }: { children: React.ReactNode }) {
   // Azione: Modifica squadra
   const updateTeam = useCallback(
     async (teamId: string, updates: Partial<Team>) => {
-      const updatedTeams = teams.map((t) => (t.id === teamId ? { ...t, ...updates } : t));
+      const finalUpdates = { ...updates };
+
+      if (finalUpdates.managers && finalUpdates.managers.length > 0) {
+        const validManagers = finalUpdates.managers.filter((m) => m.name && m.name.trim().length > 0);
+        finalUpdates.managers = validManagers;
+        finalUpdates.manager_name = formatManagerNames(validManagers, ' / ');
+        finalUpdates.manager_email = formatManagerEmails(validManagers) || null;
+      } else if (finalUpdates.manager_name !== undefined || finalUpdates.manager_email !== undefined) {
+        finalUpdates.managers = getTeamManagers({
+          manager_name: finalUpdates.manager_name,
+          manager_email: finalUpdates.manager_email,
+        });
+      }
+
+      const updatedTeams = teams.map((t) => (t.id === teamId ? { ...t, ...finalUpdates } : t));
       setTeams(updatedTeams);
       broadcastLocalChange({ teams: updatedTeams });
       persistStateLocally({ teams: updatedTeams });
 
       if (supabaseConfigured) {
         const supabase = createClient();
-        await supabase.from('teams').update(updates).eq('id', teamId);
+        try {
+          const { error } = await supabase.from('teams').update(finalUpdates).eq('id', teamId);
+          if (error) {
+            // Fallback se la colonna managers non esiste ancora sul DB
+            const { managers: _m, ...fallbackUpdates } = finalUpdates;
+            await supabase.from('teams').update(fallbackUpdates).eq('id', teamId);
+          }
+        } catch (e) {
+          console.warn('Errore update squadra su Supabase, fallback retrocompatibile:', e);
+        }
       }
     },
     [teams, supabaseConfigured, broadcastLocalChange, persistStateLocally]
@@ -1411,19 +1446,43 @@ export function AuctionProvider({ children }: { children: React.ReactNode }) {
 
   // Azione: Crea nuova squadra
   const createTeam = useCallback(
-    async (name: string, manager_name: string, manager_email?: string, seasonId?: string, is_admin?: boolean) => {
+    async (
+      name: string,
+      manager_name: string,
+      manager_email?: string,
+      seasonId?: string,
+      is_admin?: boolean,
+      managers?: TeamManager[]
+    ) => {
       const targetSeasonId = seasonId || selectedSeasonId || '2026-2027';
       const cleanSlug = name
         .toLowerCase()
         .replace(/[.\s_]+/g, '_')
         .replace(/^_+|_+$/g, '');
+
+      const normalizedManagers =
+        managers && managers.length > 0
+          ? managers.filter((m) => m.name && m.name.trim().length > 0)
+          : getTeamManagers({ manager_name, manager_email });
+
+      const finalManagerName =
+        normalizedManagers.length > 0
+          ? formatManagerNames(normalizedManagers, ' / ')
+          : manager_name.trim();
+
+      const finalManagerEmail =
+        normalizedManagers.length > 0
+          ? formatManagerEmails(normalizedManagers)
+          : manager_email?.trim() || null;
+
       const newTeam: Team = {
         id: `team-${targetSeasonId}_${cleanSlug || 'squadra'}_${Date.now().toString(36).slice(-4)}`,
         league_id: league.id,
         season_id: targetSeasonId,
         name: name.trim(),
-        manager_name: manager_name.trim(),
-        manager_email: manager_email?.trim() || null,
+        manager_name: finalManagerName,
+        manager_email: finalManagerEmail || null,
+        managers: normalizedManagers,
         is_admin: Boolean(is_admin),
         initial_budget: league.total_budget || 500,
         bonus_credits: 0,
@@ -1438,7 +1497,16 @@ export function AuctionProvider({ children }: { children: React.ReactNode }) {
 
       if (supabaseConfigured) {
         const supabase = createClient();
-        await supabase.from('teams').insert(newTeam);
+        try {
+          const { error } = await supabase.from('teams').insert(newTeam);
+          if (error) {
+            // Fallback se la colonna managers non esiste ancora sul DB
+            const { managers: _m, ...fallbackTeam } = newTeam;
+            await supabase.from('teams').insert(fallbackTeam);
+          }
+        } catch (e) {
+          console.warn('Errore insert squadra su Supabase, fallback retrocompatibile:', e);
+        }
       }
 
       return newTeam;
@@ -1691,11 +1759,15 @@ export function AuctionProvider({ children }: { children: React.ReactNode }) {
         ? currentUser.realAdminEmail
         : currentUser.email || 'fabio.perfetti81@gmail.com';
 
+      const targetManagerName = targetTeam
+        ? formatManagerNames(targetTeam) || targetTeam.manager_name
+        : 'Giocatore';
+
       const impersonatedSession: UserSession = {
         email: targetTeam?.manager_email || `${teamId}@fantaasta.it`,
         isAdmin: false,
         teamId: targetTeam?.id || teamId,
-        managerName: targetTeam?.manager_name || targetTeam?.name || 'Giocatore',
+        managerName: targetManagerName,
         isImpersonating: true,
         realAdminEmail: originalAdmin,
       };
@@ -1722,14 +1794,19 @@ export function AuctionProvider({ children }: { children: React.ReactNode }) {
     (email: string, role: 'admin' | 'player', teamId?: string) => {
       const userTeam =
         teams.find((t) => t.id === teamId) ||
-        teams.find((t) => t.manager_email?.toLowerCase() === email.toLowerCase());
+        teams.find((t) => teamMatchesEmail(t, email));
+
+      const matchedManager = userTeam ? getManagerForEmail(userTeam, email) : undefined;
+      const effectiveManagerName =
+        matchedManager?.name ||
+        (userTeam ? formatManagerNames(userTeam) || userTeam.manager_name : undefined);
 
       if (role === 'admin') {
         const adminSession: UserSession = {
           email,
           isAdmin: true,
           teamId: userTeam?.id || teamId || teams[0]?.id || null,
-          managerName: userTeam?.manager_name || 'Banditore (Admin)',
+          managerName: effectiveManagerName || 'Banditore (Admin)',
           isImpersonating: false,
         };
         setCurrentUser(adminSession);
@@ -1739,7 +1816,7 @@ export function AuctionProvider({ children }: { children: React.ReactNode }) {
           email,
           isAdmin: false,
           teamId: userTeam?.id || teamId || null,
-          managerName: userTeam?.manager_name || email.split('@')[0],
+          managerName: effectiveManagerName || (email ? email.split('@')[0] : 'Partecipante'),
           isImpersonating: false,
         };
         setCurrentUser(playerSession);
